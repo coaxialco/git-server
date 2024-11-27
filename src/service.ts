@@ -33,7 +33,7 @@ export class Service extends HttpDuplex {
   logs: string[];
   last: string | undefined;
   commit: string | undefined;
-  evName: string | undefined;
+  evName: 'push' | 'tag' | 'fetch' | undefined;
   username: string | undefined;
 
   /**
