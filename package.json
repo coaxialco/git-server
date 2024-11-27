@@ -1,0 +1,60 @@
+{
+  "name": "node-git-server",
+  "version": "1.0.0",
+  "description": "🎡 A configurable git server written in Node.js",
+  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
+  "contributors": [
+    {
+      "name": "echopoint",
+      "email": "echopoint@tutanota.com"
+    },
+    {
+      "name": "Buj Itself",
+      "email": "primary@buj-dev.site"
+    }
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/gabrielcsapo/node-git-server/issues"
+  },
+  "homepage": "https://github.com/gabrielcsapo/node-git-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabrielcsapo/node-git-server.git"
+  },
+  "main": "dist/index.js",
+  "engine": {
+    "node": ">= 16"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest src/*.test.ts",
+    "build": "echo \"\" > ./build-complete.meta && tsc",
+    "prepublish": "npm run build",
+    "coverage": "vitest --coverage",
+    "install": "( [ -f ./git-package.meta ] && [ ! -f ./build-complete.meta ] && echo \"\" > ./build-complete.meta && npm install . && tsc ) || echo \"\" > ./build-complete.meta",
+    "prepare": "husky install"
+  },
+  "dependencies": {
+    "through": "^2.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.3",
+    "@types/node-fetch": "^2.6.2",
+    "@types/through": "^0.0.30",
+    "@typescript-eslint/eslint-plugin": "^5.30.5",
+    "@typescript-eslint/parser": "^5.30.5",
+    "eslint": "^8.19.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "husky": "^8.0.1",
+    "node-fetch": "^3.2.6",
+    "prettier": "^2.7.1",
+    "typescript": "^4.7.4",
+    "vitest": "^0.18.0"
+  },
+  "volta": {
+    "node": "16.15.1"
+  },
+  "packageManager": "yarn@4.5.0"
+}
