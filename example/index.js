@@ -74,7 +74,7 @@ repos.listen(
   (error) => {
     if (error)
       return console.error(
-        `failed to start git-server because of error ${error}`
+        `failed to start git-server because of error ${error}`,
       ); // eslint-disable-line
     console.log(`node-git-server running at ${type}://localhost:${port}`); // eslint-disable-line
     repos.list((err, result) => {
@@ -84,5 +84,5 @@ repos.listen(
         console.log(result); // eslint-disable-line
       }
     });
-  }
+  },
 );

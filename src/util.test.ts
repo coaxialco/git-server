@@ -1,4 +1,4 @@
-import { basicAuth, noCache, parseGitName } from './util';
+import { basicAuth, noCache, parseGitName } from './util.js';
 
 describe('util', () => {
   describe('basicAuth', () => {

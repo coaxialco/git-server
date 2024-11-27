@@ -1,5 +1,5 @@
-import http from 'http';
 import EventEmitter from 'events';
+import http from 'http';
 
 export class HttpDuplex extends EventEmitter {
   setHeader(arg0: string, arg1: string) {
@@ -255,7 +255,7 @@ export class HttpDuplex extends EventEmitter {
 ['pause', 'resume', 'setEncoding'].forEach(function (name) {
   (HttpDuplex.prototype as any)[name] = function () {
     // eslint-disable-next-line prefer-rest-params
-    return (this.req as any)[name].apply(this.req, Array.from(arguments));
+    return this.req[name].apply(this.req, Array.from(arguments));
   };
 });
 
@@ -274,7 +274,7 @@ export class HttpDuplex extends EventEmitter {
 ].forEach(function (name) {
   (HttpDuplex.prototype as any)[name] = function () {
     // eslint-disable-next-line prefer-rest-params
-    return (this.res as any)[name].apply(this.res, Array.from(arguments));
+    return this.res[name].apply(this.res, Array.from(arguments));
   };
 });
 

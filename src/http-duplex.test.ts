@@ -1,10 +1,8 @@
-import { HttpDuplex } from './http-duplex';
-import http, { Server } from 'http';
-import fetch from 'node-fetch';
 import { readFileSync } from 'fs';
+import http, { Server } from 'http';
 import { AddressInfo } from 'net';
+import { HttpDuplex } from './http-duplex.js';
 
-// eslint-disable-next-line no-undef
 const selfSrc = readFileSync(__filename);
 
 declare global {
@@ -59,7 +57,7 @@ describe('http-duplex', () => {
     console.log('create server');
     server = http.createServer(function (req, res) {
       const dup = new HttpDuplex(req, res);
-      console.log(dup.method + ' ' + dup.url); // eslint-disable-line
+      console.log(dup.method + ' ' + dup.url);
       switch (dup.url) {
         case '/':
           dup.setHeader('content-type', 'text/plain');
@@ -97,7 +95,7 @@ describe('http-duplex', () => {
               dup.readable,
               dup.writable,
               dup.connection,
-              dup.socket
+              dup.socket,
             );
             dup.end(output.streamline());
           } else {

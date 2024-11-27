@@ -1,10 +1,10 @@
-import http from 'http';
 import { spawn } from 'child_process';
+import http from 'http';
 
-import { Git } from './git';
-import { HttpDuplex } from './http-duplex';
-import { Service, ServiceOptions } from './service';
-import { ServiceString } from './types';
+import { Git } from './git.js';
+import { HttpDuplex } from './http-duplex.js';
+import { Service, ServiceOptions } from './service.js';
+import { ServiceString } from './types.js';
 
 export function packSideband(s: string): string {
   const n = (4 + s.length).toString(16);
@@ -30,7 +30,7 @@ export function noCache(res: http.ServerResponse) {
 export function basicAuth(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  callback: (username?: string, password?: string) => void
+  callback: (username?: string, password?: string) => void,
 ) {
   if (!req.headers['authorization']) {
     res.setHeader('Content-Type', 'text/plain');
@@ -61,7 +61,7 @@ export function serviceRespond(
   dup: HttpDuplex | Git,
   service: ServiceString,
   repoLocation: string,
-  res: http.ServerResponse
+  res: http.ServerResponse,
 ) {
   res.write(packSideband('# service=git-' + service + '\n'));
   res.write('0000');
@@ -77,7 +77,7 @@ export function serviceRespond(
   ps.on('error', (err) => {
     dup.emit(
       'error',
-      new Error(`${err.message} running command ${cmd.join(' ')}`)
+      new Error(`${err.message} running command ${cmd.join(' ')}`),
     );
   });
   ps.stdout.pipe(res);
@@ -95,12 +95,12 @@ export function infoResponse(
   repo: string,
   service: ServiceString,
   req: http.IncomingMessage,
-  res: http.ServerResponse
+  res: http.ServerResponse,
 ) {
   function next() {
     res.setHeader(
       'content-type',
-      'application/x-git-' + service + '-advertisement'
+      'application/x-git-' + service + '-advertisement',
     );
     noCache(res);
     serviceRespond(git, service, git.dirMap(repo), res);
@@ -158,7 +158,7 @@ export function parseGitName(repo: string): string {
 export function createAction(
   opts: ServiceOptions,
   req: http.IncomingMessage,
-  res: http.ServerResponse
+  res: http.ServerResponse,
 ): Service {
   const service = new Service(opts, req, res);
 

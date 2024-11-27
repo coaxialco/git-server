@@ -11,3 +11,4 @@ dist
 temp
 etc
 build-complete.meta
+.eslintcache

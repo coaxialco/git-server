@@ -1,16 +1,17 @@
+import { spawn } from 'child_process';
 import http from 'http';
+import os from 'os';
+import util from 'util';
 import zlib from 'zlib';
 import through from 'through';
-import util from 'util';
-import os from 'os';
-import { spawn } from 'child_process';
 
-import { HttpDuplex } from './http-duplex';
-import { ServiceString } from './types';
-import { packSideband } from './util';
+import { HttpDuplex } from './http-duplex.js';
+import { ServiceString } from './types.js';
+import { packSideband } from './util.js';
 
 const headerRegex: { [key: string]: string } = {
-  'receive-pack': '([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/(heads|tags)\/(.*?)( |00|\u0000)|^(0000)$', // eslint-disable-line
+  'receive-pack':
+    '([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/(heads|tags)\/(.*?)( |00|\u0000)|^(0000)$', // eslint-disable-line
   'upload-pack': '^\\S+ ([0-9a-fA-F]+)',
 };
 
@@ -44,7 +45,7 @@ export class Service extends HttpDuplex {
   constructor(
     opts: ServiceOptions,
     req: http.IncomingMessage,
-    res: http.ServerResponse
+    res: http.ServerResponse,
   ) {
     super(req, res);
 
@@ -134,7 +135,7 @@ export class Service extends HttpDuplex {
         ps.on('error', (error: Error) => {
           this.emit(
             'error',
-            new Error(`${error.message} running command ${cmd.join(' ')}`)
+            new Error(`${error.message} running command ${cmd.join(' ')}`),
           );
         });
 
@@ -161,7 +162,7 @@ export class Service extends HttpDuplex {
             if (this.listeners('response').length > 0) return;
 
             respStream.queue(null);
-          }
+          },
         );
 
         (respStream as any).log = this.log.bind(this);

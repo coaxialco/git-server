@@ -1,9 +1,9 @@
-import fs from 'fs';
-import path from 'path';
 import { spawn, exec, SpawnOptionsWithoutStdio } from 'child_process';
+import fs from 'fs';
 import http from 'http';
+import path from 'path';
 
-import { Git } from './git';
+import { Git } from './git.js';
 
 const wrapCallback = (func: { (callback: any): void }) => {
   return new Promise((resolve) => {
@@ -18,7 +18,7 @@ describe('git', () => {
     let lastCommit: string;
 
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -90,7 +90,7 @@ describe('git', () => {
       spawn(
         'git',
         ['push', 'http://localhost:' + port + '/xyz/doom', 'master'],
-        { cwd: srcDir }
+        { cwd: srcDir },
       ).on('exit', (code) => {
         expect(code).toBe(0);
         callback();
@@ -115,7 +115,7 @@ describe('git', () => {
     expect.assertions(8);
 
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -160,7 +160,7 @@ describe('git', () => {
         (code) => {
           expect(code).toBe(0);
           callback();
-        }
+        },
       );
     });
     await wrapCallback((callback: () => void) => {
@@ -194,12 +194,12 @@ describe('git', () => {
 
     const port = Math.floor(Math.random() * ((1 << 16) - 1e4)) + 1e4;
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const targetDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
 
     fs.mkdirSync(repoDir, '0700');
@@ -254,7 +254,7 @@ describe('git', () => {
         ['push', 'http://localhost:' + port + '/doom.git', 'master'],
         {
           cwd: srcDir,
-        }
+        },
       ).on('exit', (code) => {
         expect(code).toBe(0);
         callback();
@@ -288,7 +288,7 @@ describe('git', () => {
     expect.assertions(27);
 
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -361,7 +361,7 @@ describe('git', () => {
         (code) => {
           expect(code).toBe(0);
           callback();
-        }
+        },
       );
     });
     await wrapCallback((callback: () => void) => {
@@ -400,7 +400,7 @@ describe('git', () => {
       spawn(
         'git',
         ['push', '--tags', 'http://localhost:' + port + '/doom', 'master'],
-        { cwd: srcDir }
+        { cwd: srcDir },
       ).on('exit', (code) => {
         expect(code).toBe(0);
         callback();
@@ -429,14 +429,14 @@ describe('git', () => {
       '..',
       'fixtures',
       'server',
-      'tmp'
+      'tmp',
     );
     const notWorkingRepoDir = path.resolve(
       __dirname,
       '..',
       'fixtures',
       'server',
-      'temp'
+      'temp',
     );
 
     test('should return back with one directory in server', async () => {
@@ -478,13 +478,12 @@ describe('git', () => {
     function _spawn(
       cmd: string,
       args: any[] | readonly string[] | undefined,
-      opts: SpawnOptionsWithoutStdio | undefined
+      opts: SpawnOptionsWithoutStdio | undefined,
     ) {
       const ps = spawn(cmd, args, opts);
       ps.on('error', (err) => {
         console.error(
-          // eslint-disable-line
-          err.message + ' while executing: ' + cmd + ' ' + args?.join(' ')
+          err.message + ' while executing: ' + cmd + ' ' + args?.join(' '),
         );
       });
       return ps;
@@ -493,7 +492,7 @@ describe('git', () => {
     let lastCommit: string;
 
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -554,7 +553,7 @@ describe('git', () => {
             lastCommit = stdout.split(/\s+/)[1];
             callback();
           });
-        }
+        },
       );
     });
     await wrapCallback((callback: () => void) => {
@@ -579,7 +578,7 @@ describe('git', () => {
         const res =
           /fatal: bad default revision 'HEAD'/.test(data) ||
           /fatal: your current branch 'master' does not have any commits yet/.test(
-            data
+            data,
           );
         expect(res).toBeTruthy();
       });
@@ -589,7 +588,7 @@ describe('git', () => {
 
   test('create git server via listen() command', async () => {
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -616,7 +615,7 @@ describe('git', () => {
   test('should return promise that resolves when server is closed if no callback specified', async () => {
     await new Promise((resolve) => {
       const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-        16
+        16,
       )}`;
 
       fs.mkdirSync(repoDir, '0700');
@@ -633,7 +632,7 @@ describe('git', () => {
 
   test('should be able to protect certain routes', async () => {
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -665,7 +664,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:root@localhost:${port}/doom.git`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
 
       clone.on('close', function (code) {
@@ -677,7 +676,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:world@localhost:${port}/doom.git doom1`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
       let error = '';
 
@@ -687,7 +686,7 @@ describe('git', () => {
 
       clone.on('close', function (code) {
         expect(error).toBe(
-          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`
+          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`,
         );
         expect(code).toBe(128);
         callback();
@@ -700,7 +699,7 @@ describe('git', () => {
     expect.assertions(13);
 
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -738,7 +737,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:root@localhost:${port}/doom.git`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
 
       clone.on('close', function (code) {
@@ -750,7 +749,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:world@localhost:${port}/doom.git doom1`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
       let error = '';
 
@@ -760,7 +759,7 @@ describe('git', () => {
 
       clone.on('close', function (code) {
         expect(error).toBe(
-          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`
+          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`,
         );
         expect(code).toBe(128);
         callback();
@@ -771,7 +770,7 @@ describe('git', () => {
 
   test('should be able to protect certain routes with a promised authenticate', async () => {
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -805,7 +804,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:root@localhost:${port}/doom.git`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
 
       clone.on('close', function (code) {
@@ -817,7 +816,7 @@ describe('git', () => {
       const clone = spawn(
         'git',
         ['clone', `http://root:world@localhost:${port}/doom.git doom1`],
-        { cwd: dstDir }
+        { cwd: dstDir },
       );
       let error = '';
 
@@ -827,7 +826,7 @@ describe('git', () => {
 
       clone.on('close', function (code) {
         expect(error).toBe(
-          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`
+          `Cloning into 'doom.git doom1'...\nfatal: unable to access 'http://localhost:${port}/doom.git doom1/': URL using bad/illegal format or missing URL\n`,
         );
         expect(code).toBe(128);
         callback();
@@ -838,7 +837,7 @@ describe('git', () => {
 
   test('should be able to send custom messages to git client (main stream)', async () => {
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -894,7 +893,7 @@ describe('git', () => {
       const push = spawn(
         'git',
         ['push', 'http://localhost:' + port + '/doom.git', 'master'],
-        { cwd: srcDir }
+        { cwd: srcDir },
       );
 
       push.stdout.on('data', (data) => {
@@ -911,7 +910,7 @@ describe('git', () => {
 
       push.on('exit', () => {
         expect(
-          logs.join(' ').indexOf('remote: Have a great day!') > -1
+          logs.join(' ').indexOf('remote: Have a great day!') > -1,
         ).toBeTruthy();
         callback();
       });
@@ -922,7 +921,7 @@ describe('git', () => {
 
   test('should be able to send custom messages to git client (response stream)', async () => {
     const repoDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(
-      16
+      16,
     )}`;
     const srcDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
     const dstDir = `/tmp/${Math.floor(Math.random() * (1 << 30)).toString(16)}`;
@@ -982,7 +981,7 @@ describe('git', () => {
       const push = spawn(
         'git',
         ['push', 'http://localhost:' + port + '/doom.git', 'master'],
-        { cwd: srcDir }
+        { cwd: srcDir },
       );
 
       push.stdout.on('data', (data) => {
@@ -999,7 +998,7 @@ describe('git', () => {
 
       push.on('exit', () => {
         expect(
-          logs.join(' ').indexOf('remote: Have a great day!') > -1
+          logs.join(' ').indexOf('remote: Have a great day!') > -1,
         ).toBeTruthy();
         callback();
       });

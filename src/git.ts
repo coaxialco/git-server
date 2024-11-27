@@ -1,15 +1,15 @@
-import fs from 'fs';
-
-import path from 'path';
-import http, { ServerOptions } from 'http';
-import https from 'https';
-import url from 'url';
-import qs from 'querystring';
-import { HttpDuplex } from './http-duplex';
-
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import fs from 'fs';
 
+import http, { ServerOptions } from 'http';
+import https from 'https';
+import path from 'path';
+import qs from 'querystring';
+import url from 'url';
+import { HttpDuplex } from './http-duplex.js';
+
+import { ServiceString } from './types';
 import {
   parseGitName,
   createAction,
@@ -17,7 +17,6 @@ import {
   basicAuth,
   noCache,
 } from './util';
-import { ServiceString } from './types';
 
 const services = ['upload-pack', 'receive-pack'];
 
@@ -29,7 +28,7 @@ export interface GitOptions {
   autoCreate?: boolean;
   authenticate?: (
     options: GitAuthenticateOptions,
-    callback: (error?: Error) => void | undefined
+    callback: (error?: Error) => void | undefined,
   ) => void | Promise<Error | undefined | void> | undefined;
   checkout?: boolean;
 }
@@ -38,12 +37,7 @@ export interface GitAuthenticateOptions {
   type: string;
   repo: string;
   user: (() => Promise<[string | undefined, string | undefined]>) &
-    ((
-      callback: (
-        username?: string | undefined,
-        password?: string | undefined
-      ) => void
-    ) => void);
+    ((callback: (username?: string, password?: string) => void) => void);
   headers: http.IncomingHttpHeaders;
 }
 
@@ -150,7 +144,7 @@ export class Git extends EventEmitter implements GitEvents {
   authenticate:
     | ((
         options: GitAuthenticateOptions,
-        callback: (error?: Error) => void | undefined
+        callback: (error?: Error) => void | undefined,
       ) => void | Promise<Error | undefined | void> | undefined)
     | undefined;
 
@@ -185,7 +179,7 @@ export class Git extends EventEmitter implements GitEvents {
   */
   constructor(
     repoDir: string | ((dir?: string) => string),
-    options: GitOptions = {}
+    options: GitOptions = {},
   ) {
     super();
 
@@ -193,9 +187,7 @@ export class Git extends EventEmitter implements GitEvents {
       this.dirMap = repoDir;
     } else {
       this.dirMap = (dir?: string): string => {
-        return path.normalize(
-          (dir ? path.join(repoDir, dir) : repoDir) as string
-        );
+        return path.normalize(dir ? path.join(repoDir, dir) : repoDir);
       };
     }
 
@@ -213,7 +205,7 @@ export class Git extends EventEmitter implements GitEvents {
   list(callback: (error: Error | undefined, repos?: string[]) => void): void;
   list(): Promise<string[]>;
   list(
-    callback?: (error: Error | undefined, repos?: string[]) => void
+    callback?: (error: Error | undefined, repos?: string[]) => void,
   ): Promise<string[]> | void {
     const execf = (res: (repos: string[]) => void, rej: (err: Error) => void) =>
       fs.readdir(this.dirMap(), (error, results) => {
@@ -227,7 +219,7 @@ export class Git extends EventEmitter implements GitEvents {
     if (callback)
       return execf(
         (repos) => callback(void 0, repos),
-        (err) => callback(err, void 0)
+        (err) => callback(err, void 0),
       );
     else return new Promise<string[]>((res, rej) => execf(res, rej));
   }
@@ -323,7 +315,6 @@ export class Git extends EventEmitter implements GitEvents {
       (req: http.IncomingMessage, res: http.ServerResponse) => {
         if (req.method !== 'GET') return false;
 
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
         const u = url.parse(req?.url || '');
         const m = u.pathname?.match(/\/(.+)\/info\/refs$/);
         if (!m) return false;
@@ -351,7 +342,7 @@ export class Git extends EventEmitter implements GitEvents {
             res.setHeader('Content-Type', 'text/plain');
             res.setHeader(
               'WWW-Authenticate',
-              'Basic realm="authorization needed"'
+              'Basic realm="authorization needed"',
             );
             res.writeHead(401);
             res.end(typeof error === 'string' ? error : error.toString());
@@ -366,12 +357,12 @@ export class Git extends EventEmitter implements GitEvents {
           const type = this.getType(service);
           const headers = req.headers;
           const user = (
-            callback?: (username?: string, password?: string) => void
+            callback?: (username?: string, password?: string) => void,
           ) =>
             callback
               ? basicAuth(req, res, callback)
               : new Promise<[string | undefined, string | undefined]>(
-                  (resolve) => basicAuth(req, res, (u, p) => resolve([u, p]))
+                  (resolve) => basicAuth(req, res, (u, p) => resolve([u, p])),
                 );
 
           const promise = this.authenticate(
@@ -383,7 +374,7 @@ export class Git extends EventEmitter implements GitEvents {
             },
             (error?: Error) => {
               return next(error);
-            }
+            },
           );
 
           if (promise instanceof Promise) {
@@ -463,7 +454,7 @@ export class Git extends EventEmitter implements GitEvents {
 
         res.setHeader(
           'content-type',
-          'application/x-git-' + service + '-result'
+          'application/x-git-' + service + '-result',
         );
         noCache(res);
 
@@ -474,7 +465,7 @@ export class Git extends EventEmitter implements GitEvents {
             cwd: self.dirMap(repo),
           },
           req,
-          res
+          res,
         );
 
         action.on('header', () => {
