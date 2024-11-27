@@ -36,6 +36,7 @@
     "prepare": "husky install"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.701.0",
     "through": "^2.3.8"
   },
   "devDependencies": {
@@ -51,6 +52,7 @@
     "node-fetch": "^3.2.6",
     "prettier": "^2.7.1",
     "typescript": "^4.7.4",
+    "vite": "^6.0.1",
     "vitest": "^0.18.0"
   },
   "volta": {
