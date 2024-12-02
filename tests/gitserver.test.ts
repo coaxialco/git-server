@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { GitServer } from '../src/gitserver';
+import { GitServer } from '../src';
 
 interface GitInfo {
   repo: string;
