@@ -10,6 +10,7 @@ import { GitServer } from '../src/gitserver';
 interface GitInfo {
   repo: string;
   accept: () => void;
+  reject: (reason: string) => void;
 }
 
 describe('GitServer', () => {
@@ -403,5 +404,184 @@ describe('GitServer', () => {
         });
       }),
     ).rejects.toThrow();
+  });
+
+  test('should auto-accept after timeout if no explicit accept/reject', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await new Promise<void>((resolve, reject) => {
+      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      gitInit.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git init failed with code ${code}`));
+      });
+    });
+
+    // Add event listener without accept/reject to trigger auto-accept
+    let eventReceived = false;
+    gitServer.once('fetch', () => {
+      eventReceived = true;
+      // Deliberately not calling accept() to test auto-accept
+    });
+
+    // Start git clone operation
+    const clonePromise = new Promise<void>((resolve, reject) => {
+      const gitClone = spawn('git', ['clone', cloneUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+
+      gitClone.stderr.on('data', (data) => {
+        console.error(`git clone stderr: ${data}`);
+      });
+
+      gitClone.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git clone failed with code ${code}`));
+      });
+    });
+
+    await clonePromise;
+    expect(eventReceived).toBe(true);
+  });
+
+  test('should handle explicit rejection', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await new Promise<void>((resolve, reject) => {
+      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      gitInit.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git init failed with code ${code}`));
+      });
+    });
+
+    // Add event listener that explicitly rejects
+    gitServer.once('fetch', (info: GitInfo) => {
+      info.reject('Operation rejected by test');
+    });
+
+    // Attempt to clone (should fail due to rejection)
+    const clonePromise = new Promise((resolve, reject) => {
+      const gitClone = spawn('git', ['clone', cloneUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+
+      gitClone.stderr.on('data', (data) => {
+        console.error(`git clone stderr: ${data}`);
+      });
+
+      gitClone.on('error', (error) => {
+        reject(error);
+      });
+
+      gitClone.on('exit', (code) => {
+        if (code === 0) resolve(code);
+        else reject(new Error(`git clone failed with code ${code}`));
+      });
+    });
+
+    await expect(clonePromise).rejects.toThrow();
+  });
+
+  test('should ignore multiple accept/reject calls', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await new Promise<void>((resolve, reject) => {
+      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      gitInit.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git init failed with code ${code}`));
+      });
+    });
+
+    let acceptCallCount = 0;
+    let rejectCallCount = 0;
+
+    // Add event listener that tries multiple accepts and rejects
+    gitServer.once('fetch', (info: GitInfo) => {
+      // Try to accept multiple times
+      info.accept();
+      info.accept();
+      acceptCallCount += 2;
+
+      // Try to reject after accept
+      info.reject('Should be ignored');
+      rejectCallCount += 1;
+    });
+
+    // Start git clone operation
+    const clonePromise = new Promise<void>((resolve, reject) => {
+      const gitClone = spawn('git', ['clone', cloneUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+
+      gitClone.stderr.on('data', (data) => {
+        console.error(`git clone stderr: ${data}`);
+      });
+
+      gitClone.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git clone failed with code ${code}`));
+      });
+    });
+
+    await clonePromise;
+    expect(acceptCallCount).toBe(2);
+    expect(rejectCallCount).toBe(1);
+
+    const exists = await fs
+      .access(join(cloneDir, 'testrepo'))
+      .then(() => true)
+      .catch(() => false);
+
+    expect(exists).toBe(true);
   });
 });

@@ -4,9 +4,9 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
 import { createServer, IncomingMessage, ServerResponse, Server } from 'http';
+import { PassThrough } from 'stream';
 import { join, normalize } from 'path';
 import { parse } from 'url';
-import { Service } from './service.js';
 import { noCache, basicAuth, packSideband } from './util.js';
 
 interface GitServerOptions {
@@ -112,12 +112,10 @@ export class GitServer extends EventEmitter {
       return;
     }
 
-    // Authenticate if needed
     const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
+
     try {
-      console.log(
-        `[GitServer] Attempting authentication for ${type} operation`,
-      );
+      console.log(`[GitServer] Attempting authentication for ${type} operation`);
       await this.authenticate(req, res, type, repoName);
       console.log(`[GitServer] Authentication successful`);
     } catch (error) {
@@ -127,7 +125,6 @@ export class GitServer extends EventEmitter {
       return;
     }
 
-    // Check if repo exists
     try {
       console.log(`[GitServer] Checking repository existence: ${repoPath}`);
       await fs.access(repoPath);
@@ -149,43 +146,99 @@ export class GitServer extends EventEmitter {
       }
     }
 
-    // Send response
-    console.log(
-      `[GitServer] Sending info/refs response for service: ${serviceName}`,
-    );
-    res.statusCode = 200;
-    res.setHeader(
-      'Content-Type',
-      `application/x-git-${serviceName}-advertisement`,
-    );
-    noCache(res);
+    let accepted = false;
+    let rejected = false;
 
-    const packet = `# service=git-${serviceName}\n`;
-    res.write(packSideband(packet));
-    res.write('0000');
+    const handleAccept = () => {
+      if (accepted || rejected) return;
+      accepted = true;
 
-    const gitProcess = spawn('git', [
-      serviceName,
-      '--stateless-rpc',
-      '--advertise-refs',
-      repoPath,
-    ]);
+      console.log(`[GitServer] ${type} info/refs accepted, sending advertisement`);
+      res.statusCode = 200;
+      res.setHeader(
+        'Content-Type',
+        `application/x-git-${serviceName}-advertisement`,
+      );
+      noCache(res);
 
-    console.log(`[GitServer] Spawned git process for refs advertisement`);
+      const packet = `# service=git-${serviceName}\n`;
+      res.write(packSideband(packet));
+      res.write('0000');
 
-    gitProcess.stdout.pipe(res);
+      const gitProcess = spawn('git', [
+        serviceName,
+        '--stateless-rpc',
+        '--advertise-refs',
+        repoPath,
+      ]);
 
-    gitProcess.stderr.on('data', (data) => {
-      console.error(`[GitServer] Git refs process stderr: ${data}`);
-    });
+      console.log(`[GitServer] Spawned git process for refs advertisement`);
 
-    gitProcess.on('error', (error) => {
-      console.error(`[GitServer] Git refs process error:`, error);
-    });
+      gitProcess.stdout.pipe(res);
 
-    gitProcess.on('close', (code) => {
-      console.log(`[GitServer] Git refs process completed with code: ${code}`);
-      res.end();
+      gitProcess.stderr.on('data', (data) => {
+        console.error(`[GitServer] Git refs process stderr: ${data}`);
+      });
+
+      gitProcess.on('error', (error) => {
+        console.error(`[GitServer] Git refs process error:`, error);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end(`Git process error: ${error.message}`);
+        }
+      });
+
+      gitProcess.on('close', (code) => {
+        console.log(`[GitServer] Git refs process completed with code: ${code}`);
+        if (!res.headersSent) {
+          if (code === 0) {
+            res.end();
+          } else {
+            res.statusCode = 500;
+            res.end(`Git process exited with code ${code}`);
+          }
+        }
+      });
+    };
+
+    const handleReject = (message: string) => {
+      if (accepted || rejected) return;
+      rejected = true;
+
+      console.log(`[GitServer] ${type} info/refs rejected: ${message}`);
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'text/plain');
+      res.end(message);
+    };
+
+    // Emit event and wait for response or timeout
+    const info = {
+      repo: repoName,
+      accept: () => handleAccept(),
+      reject: (message = 'rejected') => handleReject(message),
+    };
+
+    console.log(`[GitServer] Emitting ${type} event`);
+    this.emit(type, info);
+
+    // Wait for either accept, reject, or timeout
+    await new Promise<void>((resolve) => {
+      const timeoutId = setTimeout(() => {
+        if (!accepted && !rejected) {
+          console.log(`[GitServer] Auto-accepting ${type} info/refs after timeout`);
+          handleAccept();
+        }
+        resolve();
+      }, 1000);
+
+      // Also resolve if accept/reject is called
+      const checkDone = setInterval(() => {
+        if (accepted || rejected) {
+          clearTimeout(timeoutId);
+          clearInterval(checkDone);
+          resolve();
+        }
+      }, 100);
     });
   }
 
@@ -196,12 +249,10 @@ export class GitServer extends EventEmitter {
     repoPath: string,
     action: string,
   ): Promise<void> {
-    console.log(
-      `[GitServer] Handling service: ${action} for repo: ${repoName}`,
-    );
+    console.log(`[GitServer] Handling service: ${action} for repo: ${repoName}`);
     const serviceName = action.replace('git-', '');
-
     const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
+
     try {
       console.log(`[GitServer] Authenticating ${type} operation`);
       await this.authenticate(req, res, type, repoName);
@@ -213,7 +264,6 @@ export class GitServer extends EventEmitter {
       return;
     }
 
-    // Check if repo exists
     try {
       console.log(`[GitServer] Checking repository existence: ${repoPath}`);
       await fs.access(repoPath);
@@ -225,22 +275,98 @@ export class GitServer extends EventEmitter {
       return;
     }
 
-    console.log(`[GitServer] Creating service instance for ${serviceName}`);
-    res.statusCode = 200;
-    res.setHeader('Content-Type', `application/x-git-${serviceName}-result`);
-    noCache(res);
+    // Create a paused buffer for request data
+    const buffered = new PassThrough();
+    req.pipe(buffered);
+    buffered.pause();
 
-    const service = new Service(
-      req,
-      res,
-      repoName,
-      repoPath,
-      serviceName,
-      this,
-    );
+    let accepted = false;
+    let rejected = false;
 
-    await service.execute();
-    console.log(`[GitServer] Service execution completed for ${action}`);
+    const handleAccept = () => {
+      if (accepted || rejected) return;
+      accepted = true;
+      
+      console.log(`[GitServer] ${type} operation accepted, spawning git process`);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', `application/x-git-${serviceName}-result`);
+      noCache(res);
+
+      const args = [serviceName, '--stateless-rpc', repoPath];
+      const gitProcess = spawn('git', args);
+
+      gitProcess.stderr.on('data', (data) => {
+        console.error(`[GitServer] Git process stderr: ${data}`);
+      });
+
+      gitProcess.on('error', (error) => {
+        console.error(`[GitServer] Git process error:`, error);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end(`Git process error: ${error.message}`);
+        }
+      });
+
+      gitProcess.on('close', (code) => {
+        console.log(`[GitServer] Git process closed with code ${code}`);
+        if (code === 0) {
+          if (!res.headersSent) {
+            res.write(Buffer.from('0000'));
+            res.end();
+          }
+        } else {
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.end(`Git process exited with code ${code}`);
+          }
+        }
+      });
+
+      // Setup the stream pipeline
+      gitProcess.stdout.pipe(res);
+      buffered.pipe(gitProcess.stdin);
+      buffered.resume();
+    };
+
+    const handleReject = (message: string) => {
+      if (accepted || rejected) return;
+      rejected = true;
+      
+      console.log(`[GitServer] ${type} operation rejected: ${message}`);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'text/plain');
+      res.end(message);
+    };
+
+    // Emit event and wait for response or timeout
+    const info = {
+      repo: repoName,
+      accept: () => handleAccept(),
+      reject: (message = 'rejected') => handleReject(message),
+    };
+
+    console.log(`[GitServer] Emitting ${type} event`);
+    this.emit(type, info);
+
+    // Wait for either accept, reject, or timeout
+    await new Promise<void>((resolve) => {
+      const timeoutId = setTimeout(() => {
+        if (!accepted && !rejected) {
+          console.log(`[GitServer] Auto-accepting ${type} operation after timeout`);
+          handleAccept();
+        }
+        resolve();
+      }, 1000);
+
+      // Also resolve if accept/reject is called
+      const checkDone = setInterval(() => {
+        if (accepted || rejected) {
+          clearTimeout(timeoutId);
+          clearInterval(checkDone);
+          resolve();
+        }
+      }, 100);
+    });
   }
 
   private async authenticate(
