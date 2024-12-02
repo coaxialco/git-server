@@ -197,9 +197,17 @@ describe('GitServer', () => {
 
     // Initialize bare repository
     await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
       gitInit.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git init failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git init failed with code ${code}`));
+        }
       });
     });
 
@@ -210,30 +218,46 @@ describe('GitServer', () => {
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       });
       gitClone.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git clone failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git clone failed with code ${code}`));
+        }
       });
     });
 
     // Create and commit a test file
     const testRepoPath = join(cloneDir, 'testrepo');
     await fs.writeFile(join(testRepoPath, 'test.txt'), 'test content');
-    
+
     // Configure git user
     await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn('git', ['config', 'user.email', 'test@example.com'], {
-        cwd: testRepoPath,
-      });
+      const gitConfig = spawn(
+        'git',
+        ['config', 'user.email', 'test@example.com'],
+        {
+          cwd: testRepoPath,
+        },
+      );
       gitConfig.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git config email failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git config email failed with code ${code}`));
+        }
       });
     });
-    
+
     await new Promise<void>((resolve, reject) => {
       const gitConfig = spawn('git', ['config', 'user.name', 'Test User'], {
         cwd: testRepoPath,
       });
       gitConfig.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git config name failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git config name failed with code ${code}`));
+        }
       });
     });
 
@@ -243,19 +267,30 @@ describe('GitServer', () => {
         cwd: testRepoPath,
       });
       gitConfig.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git config failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git config failed with code ${code}`));
+        }
       });
     });
 
     // Store credentials
     const credentialsPath = join(testRepoPath, '.git', 'credentials');
-    await fs.writeFile(credentialsPath, `http://${username}:${password}@localhost:${serverPort}\n`);
+    await fs.writeFile(
+      credentialsPath,
+      `http://${username}:${password}@localhost:${serverPort}\n`,
+    );
 
     // Add and commit changes
     await new Promise<void>((resolve, reject) => {
       const gitAdd = spawn('git', ['add', '.'], { cwd: testRepoPath });
       gitAdd.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git add failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git add failed with code ${code}`));
+        }
       });
     });
 
@@ -264,7 +299,11 @@ describe('GitServer', () => {
         cwd: testRepoPath,
       });
       gitCommit.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git commit failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git commit failed with code ${code}`));
+        }
       });
     });
 
@@ -272,12 +311,12 @@ describe('GitServer', () => {
     await new Promise<void>((resolve, reject) => {
       const gitPush = spawn('git', ['push', '-u', 'origin', 'HEAD:main'], {
         cwd: testRepoPath,
-        env: { 
-          ...process.env, 
+        env: {
+          ...process.env,
           GIT_TERMINAL_PROMPT: '0',
           GIT_ASKPASS: 'echo',
           GIT_USERNAME: username,
-          GIT_PASSWORD: password
+          GIT_PASSWORD: password,
         },
       });
 
@@ -295,7 +334,11 @@ describe('GitServer', () => {
       });
 
       gitPush.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git push failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git push failed with code ${code}`));
+        }
       });
     });
 
@@ -303,10 +346,11 @@ describe('GitServer', () => {
 
     // Verify the pushed file exists in the bare repository
     const bareRepoFile = join(repoDir, 'testrepo', 'objects');
-    const bareRepoExists = await fs.access(bareRepoFile)
+    const bareRepoExists = await fs
+      .access(bareRepoFile)
       .then(() => true)
       .catch(() => false);
-    
+
     expect(bareRepoExists).toBe(true);
   }, 10000);
 
@@ -329,9 +373,17 @@ describe('GitServer', () => {
 
     // Initialize bare repository
     await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
       gitInit.on('exit', (code) => {
-        code === 0 ? resolve() : reject(new Error(`git init failed with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`git init failed with code ${code}`));
+        }
       });
     });
 
@@ -343,7 +395,11 @@ describe('GitServer', () => {
           env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
         });
         gitPush.on('exit', (code) => {
-          code === 0 ? resolve(code) : reject(new Error(`git push failed with code ${code}`));
+          if (code === 0) {
+            resolve(code);
+          } else {
+            reject(new Error(`git push failed with code ${code}`));
+          }
         });
       }),
     ).rejects.toThrow();

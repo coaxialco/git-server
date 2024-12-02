@@ -33,7 +33,7 @@ export class Service extends EventEmitter {
     this.serviceName = serviceName;
     this.type = serviceName === 'receive-pack' ? 'push' : 'fetch';
     this.gitServer = gitServer;
-    
+
     // Create a paused buffer for request data
     this.buffered = new PassThrough();
     this.req.pipe(this.buffered);
@@ -41,23 +41,30 @@ export class Service extends EventEmitter {
 
     // Set up event handlers in constructor
     this.once('accepted', () => {
-      console.log(`[Service] ${this.type} operation accepted, spawning git process`);
-      
+      console.log(
+        `[Service] ${this.type} operation accepted, spawning git process`,
+      );
+
       process.nextTick(() => {
         const args = [this.serviceName, '--stateless-rpc', this.repoPath];
-        console.log(`[Service] Spawning git process with command: git ${args.join(' ')}`);
+        console.log(
+          `[Service] Spawning git process with command: git ${args.join(' ')}`,
+        );
 
         const gitProcess = spawn('git', args);
 
-        this.res.setHeader('Content-Type', `application/x-git-${this.serviceName}-result`);
+        this.res.setHeader(
+          'Content-Type',
+          `application/x-git-${this.serviceName}-result`,
+        );
         noCache(this.res);
 
         gitProcess.stderr.on('data', (data) => {
-          console.error(`[Service] Git process stderr: ${data.toString()}`);
+          console.error(`[Service] Git process stderr: ${data}`);
         });
 
         gitProcess.stdout.on('data', (data) => {
-          console.log(`[Service] Git process stdout: ${data.toString()}`);
+          console.log(`[Service] Git process stdout: ${data}`);
         });
 
         gitProcess.on('error', (error) => {
@@ -67,14 +74,19 @@ export class Service extends EventEmitter {
         });
 
         gitProcess.on('close', (code, signal) => {
-          console.log(`[Service] Git process closed with code ${code} and signal ${signal}`);
+          console.log(
+            `[Service] Git process closed with code ${code} and signal ${signal}`,
+          );
           if (code === 0) {
             // Send git protocol termination
             this.res.write(Buffer.from('0000'));
             this.res.end();
             this.emit('end');
           } else {
-            this.emit('error', new Error(`Git process exited with code ${code}`));
+            this.emit(
+              'error',
+              new Error(`Git process exited with code ${code}`),
+            );
           }
         });
 
@@ -92,7 +104,9 @@ export class Service extends EventEmitter {
       this.emit('end');
     });
 
-    console.log(`[Service] Initialized ${this.type} service for repo: ${this.repoName}, path: ${this.repoPath}`);
+    console.log(
+      `[Service] Initialized ${this.type} service for repo: ${this.repoName}, path: ${this.repoPath}`,
+    );
   }
 
   public async execute(): Promise<void> {
@@ -113,7 +127,9 @@ export class Service extends EventEmitter {
     // Auto-accept after a timeout if not accepted or rejected
     setTimeout(() => {
       if (!this.accepted && !this.rejected) {
-        console.log(`[Service] Auto-accepting ${this.type} operation after timeout`);
+        console.log(
+          `[Service] Auto-accepting ${this.type} operation after timeout`,
+        );
         this.accept();
       }
     }, 1000);
@@ -127,7 +143,9 @@ export class Service extends EventEmitter {
 
   private accept(): void {
     if (this.accepted || this.rejected) {
-      console.log(`[Service] Ignoring accept() call - already ${this.accepted ? 'accepted' : 'rejected'}`);
+      console.log(
+        `[Service] Ignoring accept() call - already ${this.accepted ? 'accepted' : 'rejected'}`,
+      );
       return;
     }
     console.log(`[Service] Accepting ${this.type} operation`);
@@ -137,7 +155,9 @@ export class Service extends EventEmitter {
 
   private reject(message = 'rejected'): void {
     if (this.accepted || this.rejected) {
-      console.log(`[Service] Ignoring reject() call - already ${this.accepted ? 'accepted' : 'rejected'}`);
+      console.log(
+        `[Service] Ignoring reject() call - already ${this.accepted ? 'accepted' : 'rejected'}`,
+      );
       return;
     }
     console.log(`[Service] Rejecting ${this.type} operation: ${message}`);

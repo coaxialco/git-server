@@ -29,9 +29,9 @@ export class GitServer extends EventEmitter {
     this.repoDir = repoDir;
     this.options = options;
     console.log(`[GitServer] Initialized with repo directory: ${repoDir}`);
-    console.log(`[GitServer] Options:`, { 
+    console.log(`[GitServer] Options:`, {
       autoCreate: options.autoCreate,
-      hasAuthenticator: !!options.authenticate 
+      hasAuthenticator: !!options.authenticate,
     });
   }
 
@@ -60,7 +60,9 @@ export class GitServer extends EventEmitter {
       /^\/(.+?)\/(info\/refs|git-(upload-pack|receive-pack))$/,
     );
     if (!match) {
-      console.log(`[GitServer] Invalid request - path does not match git operation pattern: ${pathname}`);
+      console.log(
+        `[GitServer] Invalid request - path does not match git operation pattern: ${pathname}`,
+      );
       res.statusCode = 404;
       res.end('Not Found');
       return;
@@ -68,7 +70,9 @@ export class GitServer extends EventEmitter {
 
     const [, repoName, action] = match;
     const repoPath = normalize(join(this.repoDir, repoName));
-    console.log(`[GitServer] Processing request for repo: ${repoName}, action: ${action}`);
+    console.log(
+      `[GitServer] Processing request for repo: ${repoName}, action: ${action}`,
+    );
     console.log(`[GitServer] Normalized repo path: ${repoPath}`);
 
     if (action === 'info/refs') {
@@ -89,7 +93,7 @@ export class GitServer extends EventEmitter {
     repoPath: string,
   ): Promise<void> {
     console.log(`[GitServer] Handling info/refs for repo: ${repoName}`);
-    
+
     const { query } = parse(req.url || '', true);
     const service = query['service'];
     if (!service) {
@@ -111,7 +115,9 @@ export class GitServer extends EventEmitter {
     // Authenticate if needed
     const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
     try {
-      console.log(`[GitServer] Attempting authentication for ${type} operation`);
+      console.log(
+        `[GitServer] Attempting authentication for ${type} operation`,
+      );
       await this.authenticate(req, res, type, repoName);
       console.log(`[GitServer] Authentication successful`);
     } catch (error) {
@@ -128,10 +134,15 @@ export class GitServer extends EventEmitter {
       console.log(`[GitServer] Repository exists`);
     } catch (error) {
       if (this.options.autoCreate) {
-        console.log(`[GitServer] Repository does not exist, auto-creating: ${repoPath}`);
+        console.log(
+          `[GitServer] Repository does not exist, auto-creating: ${repoPath}`,
+        );
         await this.createRepo(repoPath);
       } else {
-        console.error(`[GitServer] Repository not found and auto-create disabled:`, error);
+        console.error(
+          `[GitServer] Repository not found and auto-create disabled:`,
+          error,
+        );
         res.statusCode = 404;
         res.end('Repository not found');
         return;
@@ -139,7 +150,9 @@ export class GitServer extends EventEmitter {
     }
 
     // Send response
-    console.log(`[GitServer] Sending info/refs response for service: ${serviceName}`);
+    console.log(
+      `[GitServer] Sending info/refs response for service: ${serviceName}`,
+    );
     res.statusCode = 200;
     res.setHeader(
       'Content-Type',
@@ -183,7 +196,9 @@ export class GitServer extends EventEmitter {
     repoPath: string,
     action: string,
   ): Promise<void> {
-    console.log(`[GitServer] Handling service: ${action} for repo: ${repoName}`);
+    console.log(
+      `[GitServer] Handling service: ${action} for repo: ${repoName}`,
+    );
     const serviceName = action.replace('git-', '');
 
     const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
@@ -235,25 +250,37 @@ export class GitServer extends EventEmitter {
     repoName: string,
   ): Promise<void> {
     if (!this.options.authenticate) {
-      console.log(`[GitServer] No authentication configured, allowing ${type} operation`);
+      console.log(
+        `[GitServer] No authentication configured, allowing ${type} operation`,
+      );
       return;
     }
-  
+
     let authResult: { username?: string; password?: string };
     try {
       console.log(`[GitServer] Attempting to parse basic auth credentials`);
       authResult = await basicAuth(req);
       console.log(`[GitServer] Credentials parsed successfully`);
     } catch (error) {
-      console.error(`[GitServer] Failed to parse basic auth credentials:`, error);
+      console.error(
+        `[GitServer] Failed to parse basic auth credentials:`,
+        error,
+      );
       // Invalid Authorization header
       res.setHeader('WWW-Authenticate', 'Basic realm="Git Server"');
       throw error;
     }
-   
+
     try {
-      console.log(`[GitServer] Validating credentials for ${type} operation on ${repoName}`);
-      await this.options.authenticate(type, repoName, authResult.username, authResult.password);
+      console.log(
+        `[GitServer] Validating credentials for ${type} operation on ${repoName}`,
+      );
+      await this.options.authenticate(
+        type,
+        repoName,
+        authResult.username,
+        authResult.password,
+      );
       console.log(`[GitServer] Credentials validated successfully`);
     } catch (error) {
       console.error(`[GitServer] Credential validation failed:`, error);
@@ -265,7 +292,7 @@ export class GitServer extends EventEmitter {
   private async createRepo(repoPath: string): Promise<void> {
     console.log(`[GitServer] Creating new bare repository at: ${repoPath}`);
     await fs.mkdir(repoPath, { recursive: true });
-    
+
     await new Promise<void>((resolve, reject) => {
       console.log(`[GitServer] Initializing bare git repository`);
       const gitProcess = spawn('git', ['init', '--bare', repoPath]);
@@ -284,7 +311,9 @@ export class GitServer extends EventEmitter {
           console.log(`[GitServer] Repository created successfully`);
           resolve();
         } else {
-          console.error(`[GitServer] Repository creation failed with code: ${code}`);
+          console.error(
+            `[GitServer] Repository creation failed with code: ${code}`,
+          );
           reject(new Error(`Failed to create repository: exit code ${code}`));
         }
       });
