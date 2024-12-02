@@ -16,7 +16,7 @@
     "example": "vite-node ./example/simple.ts",
     "lint": "yarn prettier; yarn eslint; yarn typecheck",
     "prepublish": "npm run build",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules\"  NODE_ENV=test jest --runInBand --detectOpenHandles tests/service.test.ts"
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\"  NODE_ENV=test jest --runInBand --detectOpenHandles tests"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.701.0",

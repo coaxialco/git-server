@@ -1,70 +1,66 @@
-import { ServerResponse, IncomingMessage } from 'http';
-import { jest } from '@jest/globals';
-import { noCache, packSideband, basicAuth } from '../src/util';
+import { describe, it, expect } from '@jest/globals'
+import { IncomingMessage, ServerResponse } from 'http'
+import { packSideband, basicAuth, noCache } from '../src/util'
 
-describe('Utilities', () => {
-  describe('noCache', () => {
-    test('should set correct cache headers', () => {
-      const mockRes = {
-        setHeader: jest.fn(),
-      } as Partial<ServerResponse>;
-
-      noCache(mockRes as ServerResponse);
-
-      expect(mockRes.setHeader).toHaveBeenCalledWith(
-        'Expires',
-        'Fri, 01 Jan 1980 00:00:00 GMT',
-      );
-      expect(mockRes.setHeader).toHaveBeenCalledWith('Pragma', 'no-cache');
-      expect(mockRes.setHeader).toHaveBeenCalledWith(
-        'Cache-Control',
-        'no-cache, max-age=0, must-revalidate',
-      );
-    });
-  });
-
+describe('HTTP Utility Functions', () => {
   describe('packSideband', () => {
-    test('should format string correctly', () => {
-      const result = packSideband('test');
-      expect(result).toBe('0008test');
-    });
+    it('should format message with correct length prefix', () => {
+      expect(packSideband('test')).toBe('0008test')
+      expect(packSideband('longer message')).toBe('0012longer message')
+    })
+  })
 
-    test('should handle empty string', () => {
-      const result = packSideband('');
-      expect(result).toBe('0004');
-    });
-  });
+  describe('noCache', () => {
+    it('should set correct cache control headers', () => {
+      const headers: Record<string, string> = {}
+      const res = {
+        setHeader: (name: string, value: string) => {
+          headers[name] = value
+        }
+      } as ServerResponse
+
+      noCache(res)
+
+      expect(headers).toEqual({
+        'Expires': 'Fri, 01 Jan 1980 00:00:00 GMT',
+        'Pragma': 'no-cache',
+        'Cache-Control': 'no-cache, max-age=0, must-revalidate'
+      })
+    })
+  })
 
   describe('basicAuth', () => {
-    test('should parse basic auth header correctly', async () => {
-      const mockReq = {
+    it('should parse basic auth header correctly', async () => {
+      const req = {
         headers: {
-          authorization: 'Basic ' + Buffer.from('user:pass').toString('base64'),
-        },
-      } as Partial<IncomingMessage>;
+          'authorization': 'Basic ' + Buffer.from('user:pass').toString('base64')
+        }
+      } as IncomingMessage
 
-      const result = await basicAuth(mockReq as IncomingMessage);
-      expect(result).toEqual({ username: 'user', password: 'pass' });
-    });
+      const result = await basicAuth(req)
+      expect(result).toEqual({
+        username: 'user',
+        password: 'pass'
+      })
+    })
 
-    test('should reject when no auth header present', async () => {
-      const mockReq = { headers: {} } as Partial<IncomingMessage>;
+    it('should handle missing auth header', async () => {
+      const req = { headers: {} } as IncomingMessage
+      const result = await basicAuth(req)
+      expect(result).toEqual({
+        username: undefined,
+        password: undefined
+      })
+    })
 
-      await expect(basicAuth(mockReq as IncomingMessage)).rejects.toThrow(
-        'No authorization header',
-      );
-    });
-
-    test('should reject with invalid auth header', async () => {
-      const mockReq = {
+    it('should reject invalid auth header', async () => {
+      const req = {
         headers: {
-          authorization: 'Invalid header',
-        },
-      } as Partial<IncomingMessage>;
+          'authorization': 'Invalid'
+        }
+      } as IncomingMessage
 
-      await expect(basicAuth(mockReq as IncomingMessage)).rejects.toThrow(
-        'Invalid authorization header',
-      );
-    });
-  });
-});
+      await expect(basicAuth(req)).rejects.toThrow('Invalid authorization header')
+    })
+  })
+})

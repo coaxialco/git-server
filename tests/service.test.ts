@@ -1,84 +1,146 @@
-import { EventEmitter } from 'events';
-import { IncomingMessage, ServerResponse } from 'http';
-import { PassThrough } from 'stream';
-import { jest } from '@jest/globals';
+import { spawn } from 'child_process';
+import { mkdir, rm } from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import { GitServer } from '../src/gitserver';
-import { Service } from '../src/service';
 
-describe('Service', () => {
-  let mockReq: Partial<IncomingMessage>;
-  let mockRes: Partial<ServerResponse>;
-  let mockGitServer: Partial<GitServer>;
-  let service: Service;
+const generateRandomString = (): string => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    const randomIndex = Math.floor(Math.random() * chars.length);
+    result += chars.charAt(randomIndex);
+  }
+  return result;
+};
 
-  beforeEach(() => {
-    mockReq = new EventEmitter() as Partial<IncomingMessage>;
-    const pipeMock = jest.fn((dest: PassThrough) => dest);
-    (mockReq as { pipe: typeof pipeMock }).pipe = pipeMock;
+const runGitCommand = async (
+  command: string[],
+  cwd: string,
+): Promise<{ code: number; output: string; error: string }> => {
+  return new Promise((resolve) => {
+    const ps = spawn('git', command, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0', // Disable git credential prompt
+        GIT_ASKPASS: 'echo', // Prevent GUI password prompt
+      },
+    });
+    let output = '';
+    let error = '';
 
-    mockRes = {
-      setHeader: jest.fn().mockReturnThis(),
-      statusCode: 200,
-      end: jest.fn().mockReturnThis(),
-    } as unknown as Partial<ServerResponse>;
+    ps.stdout?.on('data', (data) => {
+      output += data.toString('utf8');
+    });
 
-    mockGitServer = new EventEmitter() as Partial<GitServer>;
+    ps.stderr?.on('data', (data) => {
+      error += data.toString('utf8');
+    });
 
-    service = new Service(
-      mockReq as IncomingMessage,
-      mockRes as ServerResponse,
-      'test-repo',
-      '/path/to/repo',
-      'upload-pack',
-      mockGitServer as GitServer,
-    );
+    ps.on('exit', (code) => {
+      resolve({ code: code ?? 1, output, error });
+    });
+  });
+};
+
+describe('Git Service', () => {
+  const TEST_TIMEOUT = 30000;
+  let repoDir: string;
+  let srcDir: string;
+  let dstDir: string;
+  let gitServer: GitServer;
+  let port: number;
+
+  beforeEach(async () => {
+    repoDir = path.join(os.tmpdir(), generateRandomString());
+    srcDir = path.join(os.tmpdir(), generateRandomString());
+    dstDir = path.join(os.tmpdir(), generateRandomString());
+
+    await mkdir(repoDir);
+    await mkdir(srcDir);
+    await mkdir(dstDir);
+
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    // Start server on random port
+    port = Math.floor(Math.random() * ((1 << 16) - 1e4)) + 1e4;
+    gitServer.listen(port);
   });
 
-  test('should handle fetch request correctly', async () => {
-    const mockStream = new PassThrough();
-
-    setTimeout(() => {
-      mockStream.write('mock git data\n');
-      mockStream.end();
-    }, 100);
-
-    await service.execute();
-
-    expect(mockRes.statusCode).toBe(200);
+  afterEach(async () => {
+    if (gitServer?.server) {
+      gitServer.server.close();
+    }
+    await rm(repoDir, { recursive: true, force: true });
+    await rm(srcDir, { recursive: true, force: true });
+    await rm(dstDir, { recursive: true, force: true });
   });
 
-  test('should handle push request correctly', async () => {
-    service = new Service(
-      mockReq as IncomingMessage,
-      mockRes as ServerResponse,
-      'test-repo',
-      '/path/to/repo',
-      'receive-pack',
-      mockGitServer as GitServer,
-    );
+  test(
+    'should handle git push and fetch',
+    async () => {
+      // Initialize source repo
+      await runGitCommand(['init'], srcDir);
+      await runGitCommand(['config', 'user.name', 'Test User'], srcDir);
+      await runGitCommand(['config', 'user.email', 'test@example.com'], srcDir);
+      await runGitCommand(
+        ['commit', '--allow-empty', '-m', 'Initial commit'],
+        srcDir,
+      );
 
-    const mockStream = new PassThrough();
+      const username = encodeURIComponent('test');
+      const password = encodeURIComponent('test');
+      const remoteUrl = `http://${username}:${password}@localhost:${port}/test-repo`;
 
-    setTimeout(() => {
-      mockStream.write('mock git push data\n');
-      mockStream.end();
-    }, 100);
+      // Add remote and push
+      await runGitCommand(['remote', 'add', 'origin', remoteUrl], srcDir);
 
-    await service.execute();
+      const { code: pushCode } = await runGitCommand(
+        ['push', 'origin', 'master'],
+        srcDir,
+      );
+      expect(pushCode).toBe(0);
 
-    expect(mockRes.statusCode).toBe(200);
-  });
+      // Clone to test fetch
+      const { code: cloneCode } = await runGitCommand(
+        ['clone', remoteUrl, 'cloned'],
+        dstDir,
+      );
+      expect(cloneCode).toBe(0);
+    },
+    TEST_TIMEOUT,
+  );
 
-  test('should handle rejection', async () => {
-    const executePromise = service.execute();
+  test(
+    'should handle authentication rejection',
+    async () => {
+      // Create server with authentication that always rejects
+      const authServer = new GitServer(repoDir, {
+        autoCreate: true,
+        authenticate: () => Promise.reject(new Error('Access denied')),
+      });
 
-    // We need to wait for the next tick to ensure the execute promise is running
-    await new Promise((resolve) => setTimeout(resolve, 0));
+      const authPort = Math.floor(Math.random() * ((1 << 16) - 1e4)) + 1e4;
+      authServer.listen(authPort);
 
-    service.emit('rejected', 'Access denied');
-    await executePromise;
+      const username = encodeURIComponent('invalid');
+      const password = encodeURIComponent('invalid');
+      const remoteUrl = `http://${username}:${password}@localhost:${authPort}/test-repo`;
 
-    expect(mockRes.statusCode).toBe(500);
-    expect(mockRes.end).toHaveBeenCalledWith('Access denied');
-  });
+      // Try to clone (should fail)
+      const { code: cloneCode } = await runGitCommand(
+        ['clone', remoteUrl, 'cloned'],
+        dstDir,
+      );
+
+      expect(cloneCode).not.toBe(0);
+
+      authServer.server.close();
+    },
+    TEST_TIMEOUT,
+  );
 });
