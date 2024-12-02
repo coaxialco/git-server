@@ -7,7 +7,6 @@ import { createServer, IncomingMessage, ServerResponse, Server } from 'http';
 import { PassThrough } from 'stream';
 import { join, normalize } from 'path';
 import { parse } from 'url';
-import { noCache, basicAuth, packSideband } from './util.js';
 
 interface GitServerOptions {
   autoCreate?: boolean;
@@ -17,6 +16,15 @@ interface GitServerOptions {
     username?: string,
     password?: string,
   ) => Promise<void>;
+}
+
+/**
+ * Sets cache control headers to prevent caching
+ */
+function noCache(res: ServerResponse): void {
+  res.setHeader('Expires', 'Fri, 01 Jan 1980 00:00:00 GMT');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, max-age=0, must-revalidate');
 }
 
 export class GitServer extends EventEmitter {
@@ -162,7 +170,11 @@ export class GitServer extends EventEmitter {
       noCache(res);
 
       const packet = `# service=git-${serviceName}\n`;
-      res.write(packSideband(packet));
+      // Format message for git side-band protocol
+      const length = packet.length + 4;
+      const n = length.toString(16);
+      const padded = '0'.repeat(4 - n.length) + n;
+      res.write(padded + packet);
       res.write('0000');
 
       const gitProcess = spawn('git', [
@@ -385,7 +397,20 @@ export class GitServer extends EventEmitter {
     let authResult: { username?: string; password?: string };
     try {
       console.log(`[GitServer] Attempting to parse basic auth credentials`);
-      authResult = await basicAuth(req);
+      // Extract basic auth credentials from request
+      const auth = req.headers['authorization'];
+      if (!auth) {
+        authResult = { username: undefined, password: undefined };
+      } else {
+        const parts = auth.split(' ');
+        if (parts[0] !== 'Basic' || !parts[1]) {
+          throw new Error('Invalid authorization header');
+        }
+
+        const decoded = Buffer.from(parts[1], 'base64').toString();
+        const [username, password] = decoded.split(':');
+        authResult = { username, password };
+      }
       console.log(`[GitServer] Credentials parsed successfully`);
     } catch (error) {
       console.error(
