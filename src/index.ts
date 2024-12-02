@@ -49,49 +49,27 @@ export class GitServer extends EventEmitter {
     this.server.listen(port);
   }
 
-  private async handleRequest(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
+  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     console.log(`[GitServer] Received ${req.method} request: ${req.url}`);
     console.log(`[GitServer] Request headers:`, req.headers);
 
-    const { pathname } = parse(req.url || '', true);
-    if (!pathname) {
-      console.log(`[GitServer] Invalid request - no pathname`);
+    const path = parse(req.url || '').pathname || '';
+    const [, repoName, action] = path.match(/^\/(.+?)\/(info\/refs|git-(?:upload|receive)-pack)$/) || [];
+    
+    if (!repoName || !action) {
+      console.log(`[GitServer] Invalid request path: ${path}`);
       res.statusCode = 404;
       res.end('Not Found');
       return;
     }
 
-    const match = pathname.match(
-      /^\/(.+?)\/(info\/refs|git-(upload-pack|receive-pack))$/,
-    );
-    if (!match) {
-      console.log(
-        `[GitServer] Invalid request - path does not match git operation pattern: ${pathname}`,
-      );
-      res.statusCode = 404;
-      res.end('Not Found');
-      return;
-    }
-
-    const [, repoName, action] = match;
     const repoPath = normalize(join(this.repoDir, repoName));
-    console.log(
-      `[GitServer] Processing request for repo: ${repoName}, action: ${action}`,
-    );
+    console.log(`[GitServer] Processing request for repo: ${repoName}, action: ${action}`);
     console.log(`[GitServer] Normalized repo path: ${repoPath}`);
 
-    if (action === 'info/refs') {
-      await this.handleInfoRefs(req, res, repoName, repoPath);
-    } else if (action.startsWith('git-')) {
-      await this.handleService(req, res, repoName, repoPath, action);
-    } else {
-      console.log(`[GitServer] Invalid action: ${action}`);
-      res.statusCode = 404;
-      res.end('Not Found');
-    }
+    action === 'info/refs' 
+      ? await this.handleInfoRefs(req, res, repoName, repoPath)
+      : await this.handleService(req, res, repoName, repoPath, action);
   }
 
   private async handleInfoRefs(
@@ -102,25 +80,24 @@ export class GitServer extends EventEmitter {
   ): Promise<void> {
     console.log(`[GitServer] Handling info/refs for repo: ${repoName}`);
 
-    const { query } = parse(req.url || '', true);
-    const service = query['service'];
+    const service = parse(req.url || '', true).query['service']?.toString();
     if (!service) {
-      console.log(`[GitServer] Missing service parameter in info/refs request`);
       res.statusCode = 400;
+      res.setHeader('Content-Type', 'text/plain');
       res.end('service parameter required');
       return;
     }
-    const serviceName = service.toString().replace(/^git-/, '');
-    console.log(`[GitServer] Requested service: ${serviceName}`);
 
-    if (serviceName !== 'upload-pack' && serviceName !== 'receive-pack') {
-      console.log(`[GitServer] Invalid service requested: ${serviceName}`);
+    const serviceName = service.replace(/^git-/, '');
+    const validServices = ['upload-pack', 'receive-pack'];
+    if (!validServices.includes(serviceName)) {
       res.statusCode = 400;
+      res.setHeader('Content-Type', 'text/plain');
       res.end('Invalid service');
       return;
     }
 
-    const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
+    const type = this.getOperationType(serviceName);
 
     try {
       console.log(`[GitServer] Attempting authentication for ${type} operation`);
@@ -129,6 +106,7 @@ export class GitServer extends EventEmitter {
     } catch (error) {
       console.error(`[GitServer] Authentication failed:`, error);
       res.statusCode = 401;
+      res.setHeader('Content-Type', 'text/plain');
       res.end('Authentication failed');
       return;
     }
@@ -170,12 +148,8 @@ export class GitServer extends EventEmitter {
       noCache(res);
 
       const packet = `# service=git-${serviceName}\n`;
-      // Format message for git side-band protocol
-      const length = packet.length + 4;
-      const n = length.toString(16);
-      const padded = '0'.repeat(4 - n.length) + n;
-      res.write(padded + packet);
-      res.write('0000');
+      const length = (packet.length + 4).toString(16).padStart(4, '0');
+      res.write(length + packet + '0000');
 
       const gitProcess = spawn('git', [
         serviceName,
@@ -235,22 +209,13 @@ export class GitServer extends EventEmitter {
 
     // Wait for either accept, reject, or timeout
     await new Promise<void>((resolve) => {
-      const timeoutId = setTimeout(() => {
+      setTimeout(() => {
         if (!accepted && !rejected) {
           console.log(`[GitServer] Auto-accepting ${type} info/refs after timeout`);
           handleAccept();
         }
         resolve();
       }, 1000);
-
-      // Also resolve if accept/reject is called
-      const checkDone = setInterval(() => {
-        if (accepted || rejected) {
-          clearTimeout(timeoutId);
-          clearInterval(checkDone);
-          resolve();
-        }
-      }, 100);
     });
   }
 
@@ -263,7 +228,7 @@ export class GitServer extends EventEmitter {
   ): Promise<void> {
     console.log(`[GitServer] Handling service: ${action} for repo: ${repoName}`);
     const serviceName = action.replace('git-', '');
-    const type = serviceName === 'receive-pack' ? 'push' : 'fetch';
+    const type = this.getOperationType(serviceName);
 
     try {
       console.log(`[GitServer] Authenticating ${type} operation`);
@@ -272,6 +237,7 @@ export class GitServer extends EventEmitter {
     } catch (error) {
       console.error(`[GitServer] Authentication failed:`, error);
       res.statusCode = 401;
+      res.setHeader('Content-Type', 'text/plain');
       res.end('Authentication failed');
       return;
     }
@@ -321,13 +287,10 @@ export class GitServer extends EventEmitter {
 
       gitProcess.on('close', (code) => {
         console.log(`[GitServer] Git process closed with code ${code}`);
-        if (code === 0) {
-          if (!res.headersSent) {
-            res.write(Buffer.from('0000'));
+        if (!res.headersSent) {
+          if (code === 0) {
             res.end();
-          }
-        } else {
-          if (!res.headersSent) {
+          } else {
             res.statusCode = 500;
             res.end(`Git process exited with code ${code}`);
           }
@@ -362,22 +325,13 @@ export class GitServer extends EventEmitter {
 
     // Wait for either accept, reject, or timeout
     await new Promise<void>((resolve) => {
-      const timeoutId = setTimeout(() => {
+      setTimeout(() => {
         if (!accepted && !rejected) {
           console.log(`[GitServer] Auto-accepting ${type} operation after timeout`);
           handleAccept();
         }
         resolve();
       }, 1000);
-
-      // Also resolve if accept/reject is called
-      const checkDone = setInterval(() => {
-        if (accepted || rejected) {
-          clearTimeout(timeoutId);
-          clearInterval(checkDone);
-          resolve();
-        }
-      }, 100);
     });
   }
 
@@ -388,50 +342,20 @@ export class GitServer extends EventEmitter {
     repoName: string,
   ): Promise<void> {
     if (!this.options.authenticate) {
-      console.log(
-        `[GitServer] No authentication configured, allowing ${type} operation`,
-      );
+      console.log(`[GitServer] No authentication configured, allowing ${type} operation`);
       return;
     }
 
-    let authResult: { username?: string; password?: string };
-    try {
-      console.log(`[GitServer] Attempting to parse basic auth credentials`);
-      // Extract basic auth credentials from request
-      const auth = req.headers['authorization'];
-      if (!auth) {
-        authResult = { username: undefined, password: undefined };
-      } else {
-        const parts = auth.split(' ');
-        if (parts[0] !== 'Basic' || !parts[1]) {
-          throw new Error('Invalid authorization header');
-        }
-
-        const decoded = Buffer.from(parts[1], 'base64').toString();
-        const [username, password] = decoded.split(':');
-        authResult = { username, password };
-      }
-      console.log(`[GitServer] Credentials parsed successfully`);
-    } catch (error) {
-      console.error(
-        `[GitServer] Failed to parse basic auth credentials:`,
-        error,
-      );
-      // Invalid Authorization header
-      res.setHeader('WWW-Authenticate', 'Basic realm="Git Server"');
-      throw error;
-    }
+    const auth = req.headers.authorization;
+    const [username, password] = auth
+      ? Buffer.from(auth.split(' ')[1] || '', 'base64')
+          .toString()
+          .split(':')
+      : [];
 
     try {
-      console.log(
-        `[GitServer] Validating credentials for ${type} operation on ${repoName}`,
-      );
-      await this.options.authenticate(
-        type,
-        repoName,
-        authResult.username,
-        authResult.password,
-      );
+      console.log(`[GitServer] Validating credentials for ${type} operation on ${repoName}`);
+      await this.options.authenticate(type, repoName, username, password);
       console.log(`[GitServer] Credentials validated successfully`);
     } catch (error) {
       console.error(`[GitServer] Credential validation failed:`, error);
@@ -469,5 +393,9 @@ export class GitServer extends EventEmitter {
         }
       });
     });
+  }
+
+  private getOperationType(serviceName: string): 'push' | 'fetch' {
+    return serviceName === 'receive-pack' ? 'push' : 'fetch';
   }
 }
