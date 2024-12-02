@@ -1,233 +1,119 @@
+// src/service.ts
+
 import { spawn } from 'child_process';
-import http from 'http';
-import os from 'os';
-import util from 'util';
-import zlib from 'zlib';
-import through from 'through';
+import { EventEmitter } from 'events';
+import { IncomingMessage, ServerResponse } from 'http';
+import { PassThrough } from 'stream';
+import { GitServer } from './gitserver.js';
 
-import { HttpDuplex } from './http-duplex.js';
-import { ServiceString } from './types.js';
-import { packSideband } from './util.js';
+export class Service extends EventEmitter {
+  private req: IncomingMessage;
+  private res: ServerResponse;
+  private repoName: string;
+  private repoPath: string;
+  private serviceName: string;
+  private type: 'push' | 'fetch';
+  private gitServer: GitServer;
+  private accepted = false;
+  private rejected = false;
 
-const headerRegex: { [key: string]: string } = {
-  'receive-pack':
-    '([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/(heads|tags)\/(.*?)( |00|\u0000)|^(0000)$', // eslint-disable-line
-  'upload-pack': '^\\S+ ([0-9a-fA-F]+)',
-};
-
-const decoder: { [key: string]: () => zlib.Gunzip | zlib.Deflate } = {
-  gzip: (): zlib.Gunzip => zlib.createGunzip(),
-  deflate: (): zlib.Deflate => zlib.createDeflate(),
-};
-export interface ServiceOptions {
-  repo: string;
-  cwd: string;
-  service: ServiceString;
-}
-
-export class Service extends HttpDuplex {
-  status: string;
-  repo: string;
-  service: string;
-  cwd: string;
-  logs: string[];
-  last: string | undefined;
-  commit: string | undefined;
-  evName: 'push' | 'tag' | 'fetch' | undefined;
-  username: string | undefined;
-
-  /**
-   * Handles invoking the git-*-pack binaries
-   * @param  opts - options to bootstrap the service object
-   * @param  req  - http request object
-   * @param  res  - http response
-   */
   constructor(
-    opts: ServiceOptions,
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
+    req: IncomingMessage,
+    res: ServerResponse,
+    repoName: string,
+    repoPath: string,
+    serviceName: string,
+    gitServer: GitServer,
   ) {
-    super(req, res);
+    super();
+    this.req = req;
+    this.res = res;
+    this.repoName = repoName;
+    this.repoPath = repoPath;
+    this.serviceName = serviceName;
+    this.type = serviceName === 'receive-pack' ? 'push' : 'fetch';
+    this.gitServer = gitServer;
+  }
 
-    let data = '';
+  public async execute(): Promise<void> {
+    const buffered = new PassThrough();
+    this.req.pipe(buffered);
 
-    this.status = 'pending';
-    this.repo = opts.repo;
-    this.service = opts.service;
-    this.cwd = opts.cwd;
-    this.logs = [];
+    let infoParsed = false;
+    let initialData = Buffer.alloc(0);
 
-    const buffered = through().pause();
+    buffered.on('data', (chunk) => {
+      if (!infoParsed) {
+        initialData = Buffer.concat([initialData, chunk]);
+        const str = initialData.toString();
 
-    // stream needed to receive data after decoding, but before accepting
-    const ts = through();
+        if (str.includes('\n')) {
+          infoParsed = true;
+          // We only need to check if the data contains a newline to confirm it's complete
+          str.split('\n');
 
-    const encoding = req.headers['content-encoding'];
-
-    if (encoding && decoder[encoding]) {
-      // data is compressed with gzip or deflate
-      req.pipe(decoder[encoding]()).pipe(ts).pipe(buffered);
-    } else {
-      // data is not compressed
-      req.pipe(ts).pipe(buffered);
-    }
-
-    if (req.headers['authorization']) {
-      const tokens = req.headers['authorization'].split(' ');
-      if (tokens[0] === 'Basic') {
-        const splitHash = Buffer.from(tokens[1], 'base64')
-          .toString('utf8')
-          .split(':');
-        this.username = splitHash.shift();
-      }
-    }
-
-    ts.once('data', (chunk: string) => {
-      data += chunk;
-
-      const ops = data.match(new RegExp(headerRegex[this.service], 'gi'));
-      if (!ops) return;
-      data = '';
-
-      ops.forEach((op) => {
-        let type;
-        const m = op.match(new RegExp(headerRegex[this.service]));
-
-        if (!m) return;
-
-        if (this.service === 'receive-pack') {
-          this.last = m[1];
-          this.commit = m[2];
-
-          if (m[3] == 'heads') {
-            type = 'branch';
-            this.evName = 'push';
-          } else {
-            type = 'version';
-            this.evName = 'tag';
-          }
-
-          const headers: { [key: string]: string } = {
-            last: this.last,
-            commit: this.commit,
+          const info = {
+            repo: this.repoName,
+            // commit: ...,
+            // branch: ...,
+            accept: this.accept.bind(this),
+            reject: this.reject.bind(this),
           };
-          headers[type] = (this as any)[type] = m[4];
-          this.emit('header', headers);
-        } else if (this.service === 'upload-pack') {
-          this.commit = m[1];
-          this.evName = 'fetch';
-          this.emit('header', {
-            commit: this.commit,
-          });
+
+          this.gitServer.emit(this.type, info);
+
+          setTimeout(() => {
+            if (!this.accepted && !this.rejected) {
+              this.accept();
+            }
+          }, 100);
         }
+      }
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const gitProcess = spawn('git', [
+        this.serviceName,
+        '--stateless-rpc',
+        this.repoPath,
+      ]);
+
+      gitProcess.stderr.on('data', (data) => {
+        console.error(`stderr: ${data}`);
+      });
+
+      gitProcess.on('error', (error) => {
+        console.error(`error: ${error.message}`);
+        reject(error);
+      });
+
+      gitProcess.on('close', () => {
+        this.res.end();
+        resolve();
+      });
+
+      this.on('accepted', () => {
+        buffered.pipe(gitProcess.stdin);
+        gitProcess.stdout.pipe(this.res);
+      });
+
+      this.on('rejected', (message: string) => {
+        this.res.statusCode = 500;
+        this.res.end(message);
+        resolve();
       });
     });
-
-    this.once('accept', () => {
-      process.nextTick(() => {
-        const cmd =
-          os.platform() == 'win32'
-            ? ['git', opts.service, '--stateless-rpc', opts.cwd]
-            : ['git-' + opts.service, '--stateless-rpc', opts.cwd];
-
-        const ps = spawn(cmd[0], cmd.slice(1));
-
-        ps.on('error', (error: Error) => {
-          this.emit(
-            'error',
-            new Error(`${error.message} running command ${cmd.join(' ')}`),
-          );
-        });
-
-        this.emit('service', ps);
-
-        const respStream = through(
-          // write
-          (c: any) => {
-            if (this.listeners('response').length === 0) {
-              if (this.logs.length > 0) {
-                while (this.logs.length > 0) {
-                  respStream.queue(this.logs.pop());
-                }
-              }
-
-              return respStream.queue(c);
-            }
-            // prevent git from sending the close signal
-            if (c.length === 4 && c.toString() === '0000') return;
-            respStream.queue(c);
-          },
-          // read
-          () => {
-            if (this.listeners('response').length > 0) return;
-
-            respStream.queue(null);
-          },
-        );
-
-        (respStream as any).log = this.log.bind(this);
-
-        this.emit('response', respStream, function endResponse() {
-          (res as any).queue(Buffer.from('0000'));
-          (res as any).queue(null);
-        });
-
-        ps.stdout.pipe(respStream).pipe(res);
-
-        buffered.pipe(ps.stdin);
-        buffered.resume();
-
-        ps.on('exit', () => {
-          if (this.logs.length > 0) {
-            while (this.logs.length > 0) {
-              respStream.queue(this.logs.pop());
-            }
-            respStream.queue(Buffer.from('0000'));
-            respStream.queue(null);
-          }
-
-          this.emit('exit');
-        });
-      });
-    });
-
-    this.once('reject', function onReject(code: number, msg: string) {
-      res.statusCode = code;
-      res.end(msg);
-    });
   }
 
-  log() {
-    // eslint-disable-next-line prefer-rest-params
-    const _log = util.format(...arguments);
-    const SIDEBAND = String.fromCharCode(2); // PROGRESS
-    const message = `${SIDEBAND}${_log}\n`;
-    const formattedMessage = Buffer.from(packSideband(message));
-
-    this.logs.unshift(formattedMessage.toString());
+  private accept() {
+    if (this.accepted || this.rejected) return;
+    this.accepted = true;
+    this.emit('accepted');
   }
-  /**
-   * reject request in flight
-   * @param  code - http response code
-   * @param  msg  - message that should be displayed on the client
-   */
-  reject(code: number, msg: string) {
-    if (this.status !== 'pending') return;
 
-    if (msg === undefined && typeof code === 'string') {
-      msg = code;
-      code = 500;
-    }
-    this.status = 'rejected';
-    this.emit('reject', code || 500, msg);
-  }
-  /**
-   * accepts request to access resource
-   */
-  accept() {
-    if (this.status !== 'pending') return;
-
-    this.status = 'accepted';
-    this.emit('accept');
+  private reject(message: string) {
+    if (this.accepted || this.rejected) return;
+    this.rejected = true;
+    this.emit('rejected', message);
   }
 }

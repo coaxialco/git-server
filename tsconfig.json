@@ -13,10 +13,10 @@
     "allowJs": true,
     "lib": ["esnext"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "noImplicitAny": true,
-    "types": ["node", "vitest/globals"],
+    "types": ["node", "jest"],
     "checkJs": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

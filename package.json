@@ -2,41 +2,20 @@
   "name": "node-git-server",
   "version": "1.0.0",
   "description": "🎡 A configurable git server written in Node.js",
-  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
-  "contributors": [
-    {
-      "name": "echopoint",
-      "email": "echopoint@tutanota.com"
-    },
-    {
-      "name": "Buj Itself",
-      "email": "primary@buj-dev.site"
-    }
-  ],
+  "author": "John Wehr <johnwehr@gmail.com>",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/gabrielcsapo/node-git-server/issues"
-  },
-  "homepage": "https://github.com/gabrielcsapo/node-git-server#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/gabrielcsapo/node-git-server.git"
-  },
   "main": "dist/index.js",
   "engine": {
     "node": ">= 16"
   },
   "scripts": {
     "prettier": "prettier . --write",
-    "eslint": "eslint --cache --fix ./src",
+    "eslint": "eslint --cache --fix ./src ./tests",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "lint": "yarn prettier; yarn eslint; yarn typecheck",
-    "test.old": "vitest src/*.test.ts",
     "prepublish": "npm run build",
-    "coverage": "vitest --coverage",
-    "install": "( [ -f ./git-package.meta ] && [ ! -f ./build-complete.meta ] && echo \"\" > ./build-complete.meta && npm install . && tsc ) || echo \"\" > ./build-complete.meta",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules\"  NODE_ENV=test jest --runInBand --detectOpenHandles src/*.test.ts"
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\"  NODE_ENV=test jest --runInBand --detectOpenHandles tests/*.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.701.0",
