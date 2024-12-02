@@ -1,5 +1,3 @@
-// src/util.ts
-
 import { IncomingMessage, ServerResponse } from 'http';
 
 export function noCache(res: ServerResponse) {
@@ -14,12 +12,13 @@ export function packSideband(s: string): string {
   return padded + s;
 }
 
-export function basicAuth(
+export async function basicAuth(
   req: IncomingMessage,
 ): Promise<{ username?: string; password?: string }> {
   const auth = req.headers['authorization'];
   if (!auth) {
-    return Promise.reject(new Error('No authorization header'));
+    // Return undefined credentials instead of throwing an error
+    return { username: undefined, password: undefined };
   }
 
   const parts = auth.split(' ');
@@ -30,5 +29,5 @@ export function basicAuth(
   const decoded = Buffer.from(parts[1], 'base64').toString();
   const [username, password] = decoded.split(':');
 
-  return Promise.resolve({ username, password });
+  return { username, password };
 }
