@@ -8,6 +8,7 @@ import { AddressInfo } from 'net';
 import { join, normalize } from 'path';
 import { PassThrough } from 'stream';
 import { parse } from 'url';
+import { execa } from 'execa';
 
 interface GitServerOptions {
   autoCreate?: boolean;
@@ -184,7 +185,7 @@ export class GitServer extends EventEmitter {
     let accepted = false;
     let rejected = false;
 
-    const handleAccept = () => {
+    const handleAccept = async () => {
       if (accepted || rejected) return;
       accepted = true;
 
@@ -202,42 +203,44 @@ export class GitServer extends EventEmitter {
       const length = (packet.length + 4).toString(16).padStart(4, '0');
       response.write(length + packet + '0000');
 
-      const gitProcess = spawn('git', [
-        gitServiceName,
-        '--stateless-rpc',
-        '--advertise-refs',
-        repositoryPath,
-      ]);
+      try {
+        const subprocess = execa(
+          'git',
+          [
+            gitServiceName,
+            '--stateless-rpc',
+            '--advertise-refs',
+            repositoryPath,
+          ],
+          {
+            stdio: ['pipe', 'pipe', 'pipe'],
+          },
+        );
 
-      console.log(`[GitServer] Spawned git process for refs advertisement`);
+        console.log(`[GitServer] Spawned git process for refs advertisement`);
 
-      gitProcess.stdout.pipe(response);
+        if (subprocess.stderr) {
+          subprocess.stderr.on('data', (data) => {
+            console.error(`[GitServer] Git refs process stderr: ${data}`);
+          });
+        }
 
-      gitProcess.stderr.on('data', (data) => {
-        console.error(`[GitServer] Git refs process stderr: ${data}`);
-      });
+        if (subprocess.stdout) {
+          subprocess.stdout.pipe(response);
+        }
 
-      gitProcess.on('error', (error) => {
+        await subprocess;
+
+        if (!response.headersSent) {
+          response.end();
+        }
+      } catch (error) {
         console.error(`[GitServer] Git refs process error:`, error);
         if (!response.headersSent) {
           response.statusCode = 500;
-          response.end(`Git process error: ${error.message}`);
+          response.end(`Git process error: ${String(error)}`);
         }
-      });
-
-      gitProcess.on('close', (code) => {
-        console.log(
-          `[GitServer] Git refs process completed with code: ${code}`,
-        );
-        if (!response.headersSent) {
-          if (code === 0) {
-            response.end();
-          } else {
-            response.statusCode = 500;
-            response.end(`Git process exited with code ${code}`);
-          }
-        }
-      });
+      }
     };
 
     const handleReject = (message: string) => {
@@ -269,7 +272,7 @@ export class GitServer extends EventEmitter {
       this.listenerCount('info') === 0 &&
       this.listenerCount(operationType) === 0
     ) {
-      handleAccept();
+      await handleAccept();
     }
   }
 
@@ -539,31 +542,14 @@ export class GitServer extends EventEmitter {
     );
     await fs.mkdir(repositoryPath, { recursive: true });
 
-    await new Promise<void>((resolve, reject) => {
+    try {
       console.log(`[GitServer] Initializing bare git repository`);
-      const gitProcess = spawn('git', ['init', '--bare', repositoryPath]);
-
-      gitProcess.stderr.on('data', (data) => {
-        console.log(`[GitServer] Git init process stderr: ${data}`);
-      });
-
-      gitProcess.on('error', (error) => {
-        console.error(`[GitServer] Git init process error:`, error);
-        reject(error);
-      });
-
-      gitProcess.on('close', (code) => {
-        if (code === 0) {
-          console.log(`[GitServer] Repository created successfully`);
-          resolve();
-        } else {
-          console.error(
-            `[GitServer] Repository creation failed with code: ${code}`,
-          );
-          reject(new Error(`Failed to create repository: exit code ${code}`));
-        }
-      });
-    });
+      await execa('git', ['init', '--bare', repositoryPath]);
+      console.log(`[GitServer] Repository created successfully`);
+    } catch (error) {
+      console.error(`[GitServer] Repository creation failed:`, error);
+      throw new Error(`Failed to create repository: ${String(error)}`);
+    }
   }
 
   private getOperationType(gitServiceName: string): 'push' | 'fetch' {

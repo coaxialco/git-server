@@ -281,7 +281,7 @@ describe('GitServer', () => {
       execa('git', ['clone', cloneUrl], {
         cwd: cloneDir,
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      })
+      }),
     ).rejects.toThrow();
   });
 
