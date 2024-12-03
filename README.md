@@ -35,7 +35,7 @@ The Git Server is a lightweight, configurable server for managing Git repositori
 
 ### Prerequisites
 
-- Node.js version 16 or higher.
+- Node.js version 22 or higher.
 
 ### Steps
 
