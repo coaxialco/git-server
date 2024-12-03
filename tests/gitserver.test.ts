@@ -1,6 +1,3 @@
-// tests/gitserver.test.ts
-
-import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import { mkdtemp } from 'fs/promises';
 import http from 'http';
@@ -272,45 +269,20 @@ describe('GitServer', () => {
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     // Add event listener that explicitly rejects
     gitServer.once('fetch', (info: GitInfo) => {
       info.reject('Operation rejected by test');
     });
 
-    // Attempt to clone (should fail due to rejection)
-    const clonePromise = new Promise((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
+    // Attempt to clone (should fail)
+    await expect(
+      execa('git', ['clone', cloneUrl], {
         cwd: cloneDir,
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      });
-
-      gitClone.stderr.on('data', (data) => {
-        console.error(`git clone stderr: ${data}`);
-      });
-
-      gitClone.on('error', (error) => {
-        reject(error);
-      });
-
-      gitClone.on('exit', (code) => {
-        if (code === 0) resolve(code);
-        else reject(new Error(`git clone failed with code ${code}`));
-      });
-    });
-
-    await expect(clonePromise).rejects.toThrow();
+      })
+    ).rejects.toThrow();
   });
 
   test('should ignore multiple accept/reject calls', async () => {
@@ -331,17 +303,7 @@ describe('GitServer', () => {
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     let acceptCallCount = 0;
     let rejectCallCount = 0;
@@ -358,24 +320,12 @@ describe('GitServer', () => {
       rejectCallCount += 1;
     });
 
-    // Start git clone operation
-    const clonePromise = new Promise<void>((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
-        cwd: cloneDir,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      });
-
-      gitClone.stderr.on('data', (data) => {
-        console.error(`git clone stderr: ${data}`);
-      });
-
-      gitClone.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git clone failed with code ${code}`));
-      });
+    // Clone repository
+    await execa('git', ['clone', cloneUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
-    await clonePromise;
     expect(acceptCallCount).toBe(2);
     expect(rejectCallCount).toBe(1);
 
@@ -408,17 +358,7 @@ describe('GitServer', () => {
     });
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     // Make a HEAD request
     await new Promise<void>((resolve, reject) => {
@@ -477,17 +417,7 @@ describe('GitServer', () => {
     });
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     // Make an info/refs request
     await new Promise<void>((resolve, reject) => {
@@ -589,5 +519,5 @@ describe('GitServer', () => {
       expect(receivedTagInfo.repo).toBe('testrepo');
       expect(receivedTagInfo.version).toEqual('v1.0.0');
     }
-  }, 10000);
+  });
 });
