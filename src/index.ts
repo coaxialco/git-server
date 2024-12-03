@@ -25,6 +25,14 @@ export type GitInfo = {
   reject: (message?: string) => void;
 };
 
+export type TagInfo = {
+  repo: string;
+  commit: string;
+  version: string;
+  accept: () => void;
+  reject: (message?: string) => void;
+};
+
 export class GitServer extends EventEmitter {
   private repositoryDirectory: string;
   private options: GitServerOptions;
@@ -327,6 +335,42 @@ export class GitServer extends EventEmitter {
 
       const args = [gitServiceName, '--stateless-rpc', repositoryPath];
       const gitProcess = spawn('git', args);
+
+      // Parse git protocol data for tag detection
+      if (operationType === 'push') {
+        let data = '';
+        request.on('data', (chunk: Buffer) => {
+          data += chunk.toString();
+          const matches = data.match(
+            /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ \u0000]|00)/g,
+          );
+          if (matches) {
+            matches.forEach((match) => {
+              const [, oldCommit, newCommit, version] =
+                match.match(
+                  /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ \u0000]|00)/,
+                ) || [];
+              if (oldCommit && newCommit && version) {
+                const tagInfo: TagInfo = {
+                  repo: repositoryName,
+                  commit: newCommit,
+                  version: version.replace(/\0+$/, ''),
+                  accept: () => {
+                    console.log(`[GitServer] Tag ${version} accepted`);
+                  },
+                  reject: (message = 'rejected') => {
+                    console.log(
+                      `[GitServer] Tag ${version} rejected: ${message}`,
+                    );
+                  },
+                };
+                this.emit('tag', tagInfo);
+              }
+            });
+          }
+          data = ''; // Clear processed data
+        });
+      }
 
       gitProcess.stderr.on('data', (data) => {
         console.error(`[GitServer] Git process stderr: ${data}`);
