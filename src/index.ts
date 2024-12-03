@@ -34,10 +34,46 @@ export type TagInfo = {
   reject: (message?: string) => void;
 };
 
+interface GitServerEvents {
+  push: (info: GitInfo) => void;
+  fetch: (info: GitInfo) => void;
+  tag: (info: TagInfo) => void;
+  head: (info: GitInfo) => void;
+  info: (info: GitInfo) => void;
+}
+
 export class GitServer extends EventEmitter {
   private repositoryDirectory: string;
   private options: GitServerOptions;
   private server!: Server;
+
+  public emit<K extends keyof GitServerEvents>(
+    event: K,
+    ...args: Parameters<GitServerEvents[K]>
+  ): boolean {
+    return super.emit(event, ...args);
+  }
+
+  public on<K extends keyof GitServerEvents>(
+    event: K,
+    listener: GitServerEvents[K],
+  ): this {
+    return super.on(event, listener);
+  }
+
+  public once<K extends keyof GitServerEvents>(
+    event: K,
+    listener: GitServerEvents[K],
+  ): this {
+    return super.once(event, listener);
+  }
+
+  public off<K extends keyof GitServerEvents>(
+    event: K,
+    listener: GitServerEvents[K],
+  ): this {
+    return super.off(event, listener);
+  }
 
   constructor(repositoryDirectory: string, options: GitServerOptions = {}) {
     super();

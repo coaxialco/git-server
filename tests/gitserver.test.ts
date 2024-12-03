@@ -787,32 +787,50 @@ describe('Branch Operations', () => {
     const testRepoPath = join(cloneDir, 'testrepo');
 
     // Configure git
-    await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: testRepoPath });
-    await execa('git', ['config', 'user.name', 'Test User'], { cwd: testRepoPath });
+    await execa('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['config', 'user.name', 'Test User'], {
+      cwd: testRepoPath,
+    });
 
     // Create initial commit on master branch
     await fs.writeFile(join(testRepoPath, 'initial.txt'), 'initial content');
     await execa('git', ['add', '.'], { cwd: testRepoPath });
-    await execa('git', ['commit', '-m', 'initial commit'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'initial commit'], {
+      cwd: testRepoPath,
+    });
     await execa('git', ['branch', '-M', 'main'], { cwd: testRepoPath });
     await execa('git', ['push', '-u', 'origin', 'main'], { cwd: testRepoPath });
 
     // Create and push new branch
-    await execa('git', ['checkout', '-b', 'feature-branch'], { cwd: testRepoPath });
+    await execa('git', ['checkout', '-b', 'feature-branch'], {
+      cwd: testRepoPath,
+    });
     await fs.writeFile(join(testRepoPath, 'feature.txt'), 'feature content');
     await execa('git', ['add', '.'], { cwd: testRepoPath });
-    await execa('git', ['commit', '-m', 'feature commit'], { cwd: testRepoPath });
-    await execa('git', ['push', '-u', 'origin', 'feature-branch'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'feature commit'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['push', '-u', 'origin', 'feature-branch'], {
+      cwd: testRepoPath,
+    });
 
     // Verify branch exists
-    const branches = await execa('git', ['branch', '-r'], { cwd: testRepoPath });
+    const branches = await execa('git', ['branch', '-r'], {
+      cwd: testRepoPath,
+    });
     expect(branches.stdout).toContain('origin/feature-branch');
 
     // Delete branch
-    await execa('git', ['push', 'origin', '--delete', 'feature-branch'], { cwd: testRepoPath });
+    await execa('git', ['push', 'origin', '--delete', 'feature-branch'], {
+      cwd: testRepoPath,
+    });
 
     // Verify branch was deleted
-    const remainingBranches = await execa('git', ['branch', '-r'], { cwd: testRepoPath });
+    const remainingBranches = await execa('git', ['branch', '-r'], {
+      cwd: testRepoPath,
+    });
     expect(remainingBranches.stdout).not.toContain('origin/feature-branch');
   });
 
@@ -843,8 +861,12 @@ describe('Branch Operations', () => {
     const testRepoPath = join(cloneDir, 'testrepo');
 
     // Configure git
-    await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: testRepoPath });
-    await execa('git', ['config', 'user.name', 'Test User'], { cwd: testRepoPath });
+    await execa('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['config', 'user.name', 'Test User'], {
+      cwd: testRepoPath,
+    });
 
     // Create initial commit on master branch
     await fs.writeFile(join(testRepoPath, 'main.txt'), 'main content');
@@ -857,12 +879,20 @@ describe('Branch Operations', () => {
     await execa('git', ['checkout', '-b', 'feature'], { cwd: testRepoPath });
     await fs.writeFile(join(testRepoPath, 'feature.txt'), 'feature content');
     await execa('git', ['add', '.'], { cwd: testRepoPath });
-    await execa('git', ['commit', '-m', 'feature commit'], { cwd: testRepoPath });
-    await execa('git', ['push', '-u', 'origin', 'feature'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'feature commit'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['push', '-u', 'origin', 'feature'], {
+      cwd: testRepoPath,
+    });
 
     // Merge feature into main with --no-ff to force a merge commit
     await execa('git', ['checkout', 'main'], { cwd: testRepoPath });
-    await execa('git', ['merge', '--no-ff', 'feature', '-m', 'Merge branch feature into main'], { cwd: testRepoPath });
+    await execa(
+      'git',
+      ['merge', '--no-ff', 'feature', '-m', 'Merge branch feature into main'],
+      { cwd: testRepoPath },
+    );
     await execa('git', ['push'], { cwd: testRepoPath });
 
     // Verify merge was successful
@@ -931,8 +961,12 @@ describe('Concurrent Operations', () => {
     // Setup git config for both clones
     const configureGit = async (dir: string) => {
       const repoPath = join(dir, 'testrepo');
-      await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: repoPath });
-      await execa('git', ['config', 'user.name', 'Test User'], { cwd: repoPath });
+      await execa('git', ['config', 'user.email', 'test@example.com'], {
+        cwd: repoPath,
+      });
+      await execa('git', ['config', 'user.name', 'Test User'], {
+        cwd: repoPath,
+      });
       return repoPath;
     };
 
@@ -946,14 +980,18 @@ describe('Concurrent Operations', () => {
         await fs.writeFile(join(repo1Path, 'file1.txt'), 'content1');
         await execa('git', ['add', '.'], { cwd: repo1Path });
         await execa('git', ['commit', '-m', 'commit1'], { cwd: repo1Path });
-        await execa('git', ['push', '-u', 'origin', 'branch1'], { cwd: repo1Path });
+        await execa('git', ['push', '-u', 'origin', 'branch1'], {
+          cwd: repo1Path,
+        });
       })(),
       (async () => {
         await execa('git', ['checkout', '-b', 'branch2'], { cwd: repo2Path });
         await fs.writeFile(join(repo2Path, 'file2.txt'), 'content2');
         await execa('git', ['add', '.'], { cwd: repo2Path });
         await execa('git', ['commit', '-m', 'commit2'], { cwd: repo2Path });
-        await execa('git', ['push', '-u', 'origin', 'branch2'], { cwd: repo2Path });
+        await execa('git', ['push', '-u', 'origin', 'branch2'], {
+          cwd: repo2Path,
+        });
       })(),
     ]);
 
@@ -1082,16 +1120,18 @@ describe('Error Handling', () => {
 
     let requestCount = 0;
     const originalListen = gitServer.listen.bind(gitServer);
-    
+
     // Create a proxy to intercept server creation
-    gitServer.listen = function(this: GitServer, port: number): Server {
+    gitServer.listen = function (this: GitServer, port: number): Server {
       originalListen.call(this, port);
       // The server is created in the GitServer class
-      const httpServer = (this as any).server as Server;
+      const httpServer = (this as unknown as { server: Server })
+        .server;
       if (httpServer && typeof httpServer.on === 'function') {
         httpServer.on('request', () => {
           requestCount++;
-          if (requestCount === 1) {  // Close on first request instead of second
+          if (requestCount === 1) {
+            // Close on first request instead of second
             httpServer.close();
             // Also destroy all existing connections
             httpServer.closeAllConnections();
@@ -1119,7 +1159,7 @@ describe('Error Handling', () => {
       execa('git', ['clone', repoUrl], {
         cwd: cloneDir,
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      })
+      }),
     ).rejects.toThrow();
   });
 
