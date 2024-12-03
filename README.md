@@ -199,4 +199,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgements
 
-- [node-git-server](https://github.com/gabrielcsapo/node-git-server)
+- Heavily inspired by the fantastic [node-git-server](https://github.com/gabrielcsapo/node-git-server) project.

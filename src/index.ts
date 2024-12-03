@@ -8,7 +8,7 @@ import { PassThrough } from 'stream';
 import { parse } from 'url';
 import { execa } from 'execa';
 
-interface GitServerOptions {
+export interface GitServerOptions {
   autoCreate?: boolean;
   authenticate?: (
     type: 'push' | 'fetch',
