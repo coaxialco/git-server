@@ -7,13 +7,13 @@
   "type": "module",
   "main": "dist/index.js",
   "engine": {
-    "node": ">= 16"
+    "node": ">= 22"
   },
   "scripts": {
     "prettier": "prettier . --write",
     "eslint": "eslint --cache --fix ./src ./tests",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "tsc --project tsconfig.build.json",
     "example": "vite-node ./example/simple.ts",
     "lint": "yarn prettier; yarn eslint; yarn typecheck",
     "prepublish": "npm run build",
