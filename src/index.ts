@@ -342,13 +342,13 @@ export class GitServer extends EventEmitter {
         request.on('data', (chunk: Buffer) => {
           data += chunk.toString();
           const matches = data.match(
-            /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ \u0000]|00)/g,
+            /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ ]|00)/g,
           );
           if (matches) {
             matches.forEach((match) => {
               const [, oldCommit, newCommit, version] =
                 match.match(
-                  /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ \u0000]|00)/,
+                  /([0-9a-fA-F]+) ([0-9a-fA-F]+) refs\/tags\/(.*?)(?:[ ]|00)/,
                 ) || [];
               if (oldCommit && newCommit && version) {
                 const tagInfo: TagInfo = {
