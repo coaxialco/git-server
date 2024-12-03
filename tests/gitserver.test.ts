@@ -3,15 +3,10 @@
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import { mkdtemp } from 'fs/promises';
+import http from 'http';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { GitServer } from '../src';
-
-interface GitInfo {
-  repo: string;
-  accept: () => void;
-  reject: (reason: string) => void;
-}
+import { GitServer, GitInfo } from '../src';
 
 describe('GitServer', () => {
   let gitServer: GitServer;
@@ -595,5 +590,72 @@ describe('GitServer', () => {
       .catch(() => false);
 
     expect(exists).toBe(true);
+  });
+
+  test('should handle head event', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    // Setup head handler
+    let headReceived = false;
+    gitServer.on('head', (info: GitInfo) => {
+      headReceived = true;
+      info.accept();
+    });
+
+    // Initialize bare repository
+    await new Promise<void>((resolve, reject) => {
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
+      gitInit.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git init failed with code ${code}`));
+      });
+    });
+
+    // Make a HEAD request
+    await new Promise<void>((resolve, reject) => {
+      const options = {
+        hostname: 'localhost',
+        port: serverPort,
+        path: '/testrepo/HEAD',
+        method: 'GET',
+      };
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve();
+          } else {
+            reject(
+              new Error(`HEAD request failed with status ${res.statusCode}`),
+            );
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.end();
+    });
+
+    // Verify head event was received
+    expect(headReceived).toBe(true);
   });
 });

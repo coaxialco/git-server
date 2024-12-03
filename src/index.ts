@@ -19,6 +19,12 @@ interface GitServerOptions {
   ) => Promise<void>;
 }
 
+export type GitInfo = {
+  repo: string;
+  accept: () => void;
+  reject: (message?: string) => void;
+};
+
 export class GitServer extends EventEmitter {
   private repositoryDirectory: string;
   private options: GitServerOptions;
@@ -65,7 +71,7 @@ export class GitServer extends EventEmitter {
     const requestPath = parse(request.url || '').pathname || '';
     const [, repositoryName, action] =
       requestPath.match(
-        /^\/(.+?)\/(info\/refs|git-(?:upload|receive)-pack)$/,
+        /^\/(.+?)\/(info\/refs|git-(?:upload|receive)-pack|HEAD)$/,
       ) || [];
 
     if (!repositoryName || !action) {
@@ -83,7 +89,9 @@ export class GitServer extends EventEmitter {
     );
     console.log(`[GitServer] Normalized repo path: ${repositoryPath}`);
 
-    if (action === 'info/refs') {
+    if (action === 'HEAD') {
+      await this.handleHead(request, response, repositoryName, repositoryPath);
+    } else if (action === 'info/refs') {
       await this.handleInfoRefs(
         request,
         response,
@@ -365,6 +373,65 @@ export class GitServer extends EventEmitter {
 
     // If no listeners, auto-accept immediately
     if (this.listenerCount(operationType) === 0) {
+      handleAccept();
+    }
+  }
+
+  private async handleHead(
+    request: IncomingMessage,
+    response: ServerResponse,
+    repositoryName: string,
+    repositoryPath: string,
+  ): Promise<void> {
+    console.log(`[GitServer] Handling HEAD for repo: ${repositoryName}`);
+
+    try {
+      console.log(
+        `[GitServer] Checking repository existence: ${repositoryPath}`,
+      );
+      await fs.access(repositoryPath);
+      console.log(`[GitServer] Repository exists`);
+    } catch (error) {
+      console.error(`[GitServer] Repository access error:`, error);
+      response.statusCode = 404;
+      response.end('Repository not found');
+      return;
+    }
+
+    let accepted = false;
+    let rejected = false;
+
+    const handleAccept = () => {
+      if (accepted || rejected) return;
+      accepted = true;
+
+      console.log(`[GitServer] HEAD request accepted`);
+      response.statusCode = 200;
+      response.setHeader('Content-Type', 'text/plain');
+      this.setNoCacheHeaders(response);
+      response.end();
+    };
+
+    const handleReject = (message: string) => {
+      if (accepted || rejected) return;
+      rejected = true;
+
+      console.log(`[GitServer] HEAD request rejected: ${message}`);
+      response.statusCode = 403;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end(message);
+    };
+
+    const info: GitInfo = {
+      repo: repositoryName,
+      accept: () => handleAccept(),
+      reject: (message = 'rejected') => handleReject(message),
+    };
+
+    this.emit('head', info);
+
+    // If no listeners, auto-accept immediately
+    if (this.listenerCount('head') === 0) {
       handleAccept();
     }
   }
