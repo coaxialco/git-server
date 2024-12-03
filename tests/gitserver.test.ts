@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { execa } from 'execa';
 import { GitServer, GitInfo, TagInfo } from '../src/index.js';
+import { IncomingMessage } from 'http';
 
 describe('GitServer', () => {
   let gitServer: GitServer;
@@ -519,5 +520,218 @@ describe('GitServer', () => {
       expect(receivedTagInfo.repo).toBe('testrepo');
       expect(receivedTagInfo.version).toEqual('v1.0.0');
     }
+  });
+
+  test('should reject unauthorized tag operation', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const repoUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+
+    // Set up rejection handler for push
+    gitServer.on('push', (info: GitInfo) => {
+      // Reject all pushes to prevent tag creation
+      info.reject('Tag operation not allowed');
+    });
+
+    // Clone repository
+    await execa('git', ['clone', repoUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+
+    const testRepoPath = join(cloneDir, 'testrepo');
+    
+    // Configure git
+    await execa('git', ['config', 'user.email', 'test@example.com'], { cwd: testRepoPath });
+    await execa('git', ['config', 'user.name', 'Test User'], { cwd: testRepoPath });
+    
+    // Create a commit
+    await fs.writeFile(join(testRepoPath, 'test.txt'), 'test content');
+    await execa('git', ['add', '.'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'test commit'], { cwd: testRepoPath });
+    
+    // Create and push a tag
+    await execa('git', ['tag', '-a', 'v1.0.0', '-m', 'test tag'], { cwd: testRepoPath });
+    
+    // Try to push the tag (should fail)
+    await expect(
+      execa('git', ['push', 'origin', 'v1.0.0'], {
+        cwd: testRepoPath,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      })
+    ).rejects.toThrow();
+  });
+
+  test('should reject fetch operation', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const repoUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+
+    // Set up rejection handler
+    gitServer.on('fetch', (info: GitInfo) => {
+      info.reject('Fetch operation not allowed');
+    });
+
+    // Attempt to clone (which involves a fetch operation)
+    await expect(
+      execa('git', ['clone', repoUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      }),
+    ).rejects.toThrow();
+  });
+
+  test('should reject info request', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    // Set up rejection handler
+    gitServer.on('info', (info: GitInfo) => {
+      info.reject('Info request not allowed');
+    });
+
+    // Make a direct HTTP request to the info endpoint
+    await new Promise<void>((resolve, reject) => {
+      http
+        .get(
+          `http://localhost:${serverPort}/testrepo/info/refs?service=git-upload-pack`,
+          (res) => {
+            expect(res.statusCode).toBe(403);
+            resolve();
+          },
+        )
+        .on('error', reject);
+    });
+  });
+
+  test('should reject head request', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    // Initialize bare repository
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+
+    // Set up rejection handler
+    gitServer.on('head', (info: GitInfo) => {
+      info.reject('Head request not allowed');
+    });
+
+    // Make a direct HTTP HEAD request
+    await new Promise<void>((resolve, reject) => {
+      const req = http.request(
+        `http://localhost:${serverPort}/testrepo/HEAD`,
+        { method: 'HEAD' },
+        (res) => {
+          expect(res.statusCode).toBe(403);
+          resolve();
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+  });
+
+  test('should reject push with custom message', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    const username = encodeURIComponent('testuser');
+    const password = encodeURIComponent('testpass');
+    const repoUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
+
+    // Initialize bare repository
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+
+    // Set up rejection handler with custom message
+    gitServer.on('push', (info: GitInfo) => {
+      info.reject('Custom rejection message: Push not allowed at this time');
+    });
+
+    // Clone repository
+    await execa('git', ['clone', repoUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+
+    const testRepoPath = join(cloneDir, 'testrepo');
+
+    // Configure git
+    await execa('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['config', 'user.name', 'Test User'], {
+      cwd: testRepoPath,
+    });
+
+    // Create a commit
+    await fs.writeFile(join(testRepoPath, 'test.txt'), 'test content');
+    await execa('git', ['add', '.'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'test commit'], { cwd: testRepoPath });
+
+    // Try to push (should fail with custom message)
+    const pushResult = await execa('git', ['push', 'origin', 'master'], {
+      cwd: testRepoPath,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      reject: false,
+    });
+
+    expect(pushResult.stderr).toContain('Custom rejection message');
   });
 });
