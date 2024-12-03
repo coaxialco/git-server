@@ -33,7 +33,7 @@ describe('GitServer', () => {
       },
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -56,7 +56,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -79,7 +79,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -116,7 +116,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -198,7 +198,7 @@ describe('GitServer', () => {
       },
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -225,7 +225,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -257,7 +257,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -291,7 +291,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -343,7 +343,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -400,7 +400,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -462,7 +462,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -527,7 +527,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -588,7 +588,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -622,7 +622,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -654,7 +654,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -690,7 +690,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -766,7 +766,7 @@ describe('Branch Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -840,7 +840,7 @@ describe('Branch Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -926,7 +926,7 @@ describe('Concurrent Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -1028,7 +1028,7 @@ describe('Repository Configuration', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -1122,8 +1122,8 @@ describe('Error Handling', () => {
     const originalListen = gitServer.listen.bind(gitServer);
 
     // Create a proxy to intercept server creation
-    gitServer.listen = function (this: GitServer, port: number): Server {
-      originalListen.call(this, port);
+    gitServer.listen = function (this: GitServer, port: number): Promise<void> {
+      const listenPromise = originalListen.call(this, port);
       // The server is created in the GitServer class
       const httpServer = (this as unknown as { server: Server }).server;
       if (httpServer && typeof httpServer.on === 'function') {
@@ -1137,10 +1137,10 @@ describe('Error Handling', () => {
           }
         });
       }
-      return httpServer;
+      return listenPromise;
     };
 
-    gitServer.listen(0);
+    void gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
@@ -1168,7 +1168,7 @@ describe('Error Handling', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    gitServer.listen(0);
+    await gitServer.listen(0);
     const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');

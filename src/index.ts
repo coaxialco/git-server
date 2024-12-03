@@ -1,5 +1,3 @@
-// src/gitserver.ts
-
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
@@ -89,12 +87,22 @@ export class GitServer extends EventEmitter {
   public close(): void {
     if (this.server) {
       this.server.close();
+    } else {
+      this.emitError(new Error('Server is not running'));
     }
   }
 
-  public listen(port: number): void {
+  public listen(port: number): Promise<void> {
     this.server = createServer(this.handleRequest.bind(this));
-    this.server.listen(port);
+    return new Promise<void>((resolve, reject) => {
+      this.server.once('listening', () => {
+        resolve();
+      });
+      this.server.once('error', (error) => {
+        reject(error);
+      });
+      this.server.listen(port);
+    });
   }
 
   private async handleRequest(
@@ -145,6 +153,7 @@ export class GitServer extends EventEmitter {
   ): Promise<void> {
     const service = parse(request.url || '', true).query['service']?.toString();
     if (!service) {
+      this.emitError(new Error('Missing service parameter'));
       response.statusCode = 400;
       response.setHeader('Content-Type', 'text/plain');
       response.end('service parameter required');
@@ -154,6 +163,7 @@ export class GitServer extends EventEmitter {
     const gitServiceName = service.replace(/^git-/, '');
     const validServices = ['upload-pack', 'receive-pack'];
     if (!validServices.includes(gitServiceName)) {
+      this.emitError(new Error(`Invalid service: ${gitServiceName}`));
       response.statusCode = 400;
       response.setHeader('Content-Type', 'text/plain');
       response.end('Invalid service');
@@ -461,11 +471,13 @@ export class GitServer extends EventEmitter {
   } {
     const authHeader = request.headers.authorization;
     if (!authHeader) {
+      this.emitError(new Error('Missing authorization header'));
       return {};
     }
 
     const [type, credentials] = authHeader.split(' ');
     if (type !== 'Basic' || !credentials) {
+      this.emitError(new Error(`Invalid authorization type: ${type}`));
       return {};
     }
 
@@ -502,12 +514,20 @@ export class GitServer extends EventEmitter {
   }
 
   private async createRepo(repositoryPath: string): Promise<void> {
-    await fs.mkdir(repositoryPath, { recursive: true });
+    try {
+      await fs.mkdir(repositoryPath, { recursive: true });
+    } catch (error) {
+      this.emitError(new Error(`Failed to create directory: ${String(error)}`));
+      throw error;
+    }
 
     try {
       await execa('git', ['init', '--bare', repositoryPath]);
     } catch (error) {
-      throw new Error(`Failed to create repository: ${String(error)}`);
+      this.emitError(
+        new Error(`Failed to create repository: ${String(error)}`),
+      );
+      throw error;
     }
   }
 
