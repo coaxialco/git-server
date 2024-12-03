@@ -425,7 +425,11 @@ describe('GitServer', () => {
 
     // Initialize bare repository
     await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
       gitInit.on('exit', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`git init failed with code ${code}`));
@@ -479,7 +483,11 @@ describe('GitServer', () => {
 
     // Initialize bare repository
     await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
       gitInit.on('exit', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`git init failed with code ${code}`));
@@ -534,7 +542,11 @@ describe('GitServer', () => {
 
     // Initialize bare repository
     await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
       gitInit.on('exit', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`git init failed with code ${code}`));
