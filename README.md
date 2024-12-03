@@ -177,15 +177,6 @@ server.on('error', (error: Error) => {
 });
 ```
 
-## Integration with CI/CD
-
-Integrate the Git server with CI/CD tools like Jenkins, GitLab CI, or GitHub Actions.
-
-## Security Considerations
-
-- **Authentication**: Implement robust authentication to secure the server.
-- **Authorization**: Ensure users have the correct permissions for operations.
-
 ## Testing
 
 Run tests using Jest to ensure server functionality:
@@ -205,3 +196,7 @@ Join our community on [Discord](https://discord.gg/yourserver) or [GitHub Discus
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+- [node-git-server](https://github.com/gabrielcsapo/node-git-server)
