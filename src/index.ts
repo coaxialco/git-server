@@ -79,13 +79,6 @@ export class GitServer extends EventEmitter {
     super();
     this.repositoryDirectory = repositoryDirectory;
     this.options = options;
-    console.log(
-      `[GitServer] Initialized with repo directory: ${repositoryDirectory}`,
-    );
-    console.log(`[GitServer] Options:`, {
-      autoCreate: options.autoCreate,
-      hasAuthenticator: !!options.authenticate,
-    });
   }
 
   public address(): string | AddressInfo | null {
@@ -99,7 +92,6 @@ export class GitServer extends EventEmitter {
   }
 
   public listen(port: number): void {
-    console.log(`[GitServer] Starting server on port ${port}`);
     this.server = createServer(this.handleRequest.bind(this));
     this.server.listen(port);
   }
@@ -108,11 +100,6 @@ export class GitServer extends EventEmitter {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<void> {
-    console.log(
-      `[GitServer] Received ${request.method} request: ${request.url}`,
-    );
-    console.log(`[GitServer] Request headers:`, request.headers);
-
     const requestPath = parse(request.url || '').pathname || '';
     const [, repositoryName, action] =
       requestPath.match(
@@ -120,7 +107,6 @@ export class GitServer extends EventEmitter {
       ) || [];
 
     if (!repositoryName || !action) {
-      console.log(`[GitServer] Invalid request path: ${requestPath}`);
       response.statusCode = 404;
       response.end('Not Found');
       return;
@@ -129,10 +115,6 @@ export class GitServer extends EventEmitter {
     const repositoryPath = normalize(
       join(this.repositoryDirectory, repositoryName),
     );
-    console.log(
-      `[GitServer] Processing request for repo: ${repositoryName}, action: ${action}`,
-    );
-    console.log(`[GitServer] Normalized repo path: ${repositoryPath}`);
 
     if (action === 'HEAD') {
       await this.handleHead(request, response, repositoryName, repositoryPath);
@@ -160,8 +142,6 @@ export class GitServer extends EventEmitter {
     repositoryName: string,
     repositoryPath: string,
   ): Promise<void> {
-    console.log(`[GitServer] Handling info/refs for repo: ${repositoryName}`);
-
     const service = parse(request.url || '', true).query['service']?.toString();
     if (!service) {
       response.statusCode = 400;
@@ -182,13 +162,9 @@ export class GitServer extends EventEmitter {
     const operationType = this.getOperationType(gitServiceName);
 
     try {
-      console.log(
-        `[GitServer] Attempting authentication for ${operationType} operation`,
-      );
       await this.authenticate(request, response, operationType, repositoryName);
-      console.log(`[GitServer] Authentication successful`);
     } catch (error) {
-      console.error(`[GitServer] Authentication failed:`, error);
+      console.error(error);
       response.statusCode = 401;
       response.setHeader('Content-Type', 'text/plain');
       response.end('Authentication failed');
@@ -196,22 +172,12 @@ export class GitServer extends EventEmitter {
     }
 
     try {
-      console.log(
-        `[GitServer] Checking repository existence: ${repositoryPath}`,
-      );
       await fs.access(repositoryPath);
-      console.log(`[GitServer] Repository exists`);
     } catch (error) {
       if (this.options.autoCreate) {
-        console.log(
-          `[GitServer] Repository does not exist, auto-creating: ${repositoryPath}`,
-        );
         await this.createRepo(repositoryPath);
       } else {
-        console.error(
-          `[GitServer] Repository not found and auto-create disabled:`,
-          error,
-        );
+        console.error(error);
         response.statusCode = 404;
         response.end('Repository not found');
         return;
@@ -225,9 +191,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       accepted = true;
 
-      console.log(
-        `[GitServer] ${operationType} info/refs accepted, sending advertisement`,
-      );
       response.statusCode = 200;
       response.setHeader(
         'Content-Type',
@@ -253,11 +216,9 @@ export class GitServer extends EventEmitter {
           },
         );
 
-        console.log(`[GitServer] Spawned git process for refs advertisement`);
-
         if (subprocess.stderr) {
           subprocess.stderr.on('data', (data) => {
-            console.error(`[GitServer] Git refs process stderr: ${data}`);
+            console.error(String(data));
           });
         }
 
@@ -271,7 +232,6 @@ export class GitServer extends EventEmitter {
           response.end();
         }
       } catch (error) {
-        console.error(`[GitServer] Git refs process error:`, error);
         if (!response.headersSent) {
           response.statusCode = 500;
           response.end(`Git process error: ${String(error)}`);
@@ -283,9 +243,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       rejected = true;
 
-      console.log(
-        `[GitServer] ${operationType} info/refs rejected: ${message}`,
-      );
       response.statusCode = 403;
       response.setHeader('Content-Type', 'text/plain');
       response.end(message);
@@ -319,18 +276,13 @@ export class GitServer extends EventEmitter {
     repositoryPath: string,
     action: string,
   ): Promise<void> {
-    console.log(
-      `[GitServer] Handling service: ${action} for repo: ${repositoryName}`,
-    );
     const gitServiceName = action.replace('git-', '');
     const operationType = this.getOperationType(gitServiceName);
 
     try {
-      console.log(`[GitServer] Authenticating ${operationType} operation`);
       await this.authenticate(request, response, operationType, repositoryName);
-      console.log(`[GitServer] Authentication successful`);
     } catch (error) {
-      console.error(`[GitServer] Authentication failed:`, error);
+      console.error(error);
       response.statusCode = 401;
       response.setHeader('Content-Type', 'text/plain');
       response.end('Authentication failed');
@@ -338,13 +290,9 @@ export class GitServer extends EventEmitter {
     }
 
     try {
-      console.log(
-        `[GitServer] Checking repository existence: ${repositoryPath}`,
-      );
       await fs.access(repositoryPath);
-      console.log(`[GitServer] Repository exists`);
     } catch (error) {
-      console.error(`[GitServer] Repository access error:`, error);
+      console.error(error);
       response.statusCode = 404;
       response.end('Repository not found');
       return;
@@ -362,9 +310,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       accepted = true;
 
-      console.log(
-        `[GitServer] ${operationType} operation accepted, spawning git process`,
-      );
       response.statusCode = 200;
       response.setHeader(
         'Content-Type',
@@ -394,13 +339,9 @@ export class GitServer extends EventEmitter {
                   repo: repositoryName,
                   commit: newCommit,
                   version: version.replace(/\0+$/, ''),
-                  accept: () => {
-                    console.log(`[GitServer] Tag ${version} accepted`);
-                  },
+                  accept: () => {},
                   reject: (message = 'rejected') => {
-                    console.log(
-                      `[GitServer] Tag ${version} rejected: ${message}`,
-                    );
+                    console.error(message);
                   },
                 };
                 this.emit('tag', tagInfo);
@@ -412,11 +353,10 @@ export class GitServer extends EventEmitter {
       }
 
       gitProcess.stderr.on('data', (data) => {
-        console.error(`[GitServer] Git process stderr: ${data}`);
+        console.error(String(data));
       });
 
       gitProcess.on('error', (error) => {
-        console.error(`[GitServer] Git process error:`, error);
         if (!response.headersSent) {
           response.statusCode = 500;
           response.end(`Git process error: ${error.message}`);
@@ -424,7 +364,6 @@ export class GitServer extends EventEmitter {
       });
 
       gitProcess.on('close', (code) => {
-        console.log(`[GitServer] Git process closed with code ${code}`);
         if (!response.headersSent) {
           if (code === 0) {
             response.end();
@@ -445,9 +384,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       rejected = true;
 
-      console.log(
-        `[GitServer] ${operationType} operation rejected: ${message}`,
-      );
       response.statusCode = 500;
       response.setHeader('Content-Type', 'text/plain');
       response.end(message);
@@ -473,16 +409,10 @@ export class GitServer extends EventEmitter {
     repositoryName: string,
     repositoryPath: string,
   ): Promise<void> {
-    console.log(`[GitServer] Handling HEAD for repo: ${repositoryName}`);
-
     try {
-      console.log(
-        `[GitServer] Checking repository existence: ${repositoryPath}`,
-      );
       await fs.access(repositoryPath);
-      console.log(`[GitServer] Repository exists`);
     } catch (error) {
-      console.error(`[GitServer] Repository access error:`, error);
+      console.error(error);
       response.statusCode = 404;
       response.end('Repository not found');
       return;
@@ -495,7 +425,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       accepted = true;
 
-      console.log(`[GitServer] HEAD request accepted`);
       response.statusCode = 200;
       response.setHeader('Content-Type', 'text/plain');
       this.setNoCacheHeaders(response);
@@ -506,7 +435,6 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       rejected = true;
 
-      console.log(`[GitServer] HEAD request rejected: ${message}`);
       response.statusCode = 403;
       response.setHeader('Content-Type', 'text/plain');
       response.end(message);
@@ -573,17 +501,11 @@ export class GitServer extends EventEmitter {
   }
 
   private async createRepo(repositoryPath: string): Promise<void> {
-    console.log(
-      `[GitServer] Creating new bare repository at: ${repositoryPath}`,
-    );
     await fs.mkdir(repositoryPath, { recursive: true });
 
     try {
-      console.log(`[GitServer] Initializing bare git repository`);
       await execa('git', ['init', '--bare', repositoryPath]);
-      console.log(`[GitServer] Repository created successfully`);
     } catch (error) {
-      console.error(`[GitServer] Repository creation failed:`, error);
       throw new Error(`Failed to create repository: ${String(error)}`);
     }
   }

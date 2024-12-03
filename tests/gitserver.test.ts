@@ -1125,8 +1125,7 @@ describe('Error Handling', () => {
     gitServer.listen = function (this: GitServer, port: number): Server {
       originalListen.call(this, port);
       // The server is created in the GitServer class
-      const httpServer = (this as unknown as { server: Server })
-        .server;
+      const httpServer = (this as unknown as { server: Server }).server;
       if (httpServer && typeof httpServer.on === 'function') {
         httpServer.on('request', () => {
           requestCount++;
