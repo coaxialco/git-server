@@ -40,6 +40,7 @@ interface GitServerEvents {
   tag: (info: TagInfo) => void;
   head: (info: GitInfo) => void;
   info: (info: GitInfo) => void;
+  error: (error: Error) => void;
 }
 
 export class GitServer extends EventEmitter {
@@ -164,7 +165,7 @@ export class GitServer extends EventEmitter {
     try {
       await this.authenticate(request, response, operationType, repositoryName);
     } catch (error) {
-      console.error(error);
+      this.emitError(error);
       response.statusCode = 401;
       response.setHeader('Content-Type', 'text/plain');
       response.end('Authentication failed');
@@ -177,7 +178,7 @@ export class GitServer extends EventEmitter {
       if (this.options.autoCreate) {
         await this.createRepo(repositoryPath);
       } else {
-        console.error(error);
+        this.emitError(error);
         response.statusCode = 404;
         response.end('Repository not found');
         return;
@@ -218,7 +219,7 @@ export class GitServer extends EventEmitter {
 
         if (subprocess.stderr) {
           subprocess.stderr.on('data', (data) => {
-            console.error(String(data));
+            this.emitError(new Error(String(data)));
           });
         }
 
@@ -282,7 +283,7 @@ export class GitServer extends EventEmitter {
     try {
       await this.authenticate(request, response, operationType, repositoryName);
     } catch (error) {
-      console.error(error);
+      this.emitError(error);
       response.statusCode = 401;
       response.setHeader('Content-Type', 'text/plain');
       response.end('Authentication failed');
@@ -292,7 +293,7 @@ export class GitServer extends EventEmitter {
     try {
       await fs.access(repositoryPath);
     } catch (error) {
-      console.error(error);
+      this.emitError(error);
       response.statusCode = 404;
       response.end('Repository not found');
       return;
@@ -341,7 +342,7 @@ export class GitServer extends EventEmitter {
                   version: version.replace(/\0+$/, ''),
                   accept: () => {},
                   reject: (message = 'rejected') => {
-                    console.error(message);
+                    this.emitError(new Error(`Tag rejected: ${message}`));
                   },
                 };
                 this.emit('tag', tagInfo);
@@ -353,7 +354,7 @@ export class GitServer extends EventEmitter {
       }
 
       gitProcess.stderr.on('data', (data) => {
-        console.error(String(data));
+        this.emitError(new Error(String(data)));
       });
 
       gitProcess.on('error', (error) => {
@@ -412,7 +413,7 @@ export class GitServer extends EventEmitter {
     try {
       await fs.access(repositoryPath);
     } catch (error) {
-      console.error(error);
+      this.emitError(error);
       response.statusCode = 404;
       response.end('Repository not found');
       return;
@@ -517,5 +518,15 @@ export class GitServer extends EventEmitter {
   private setNoCacheHeaders(res: ServerResponse): void {
     res.setHeader('Cache-Control', 'no-cache, max-age=0, must-revalidate');
     res.setHeader('Expires', 'Fri, 01 Jan 1980 00:00:00 GMT');
+  }
+
+  private emitError(error: unknown): void {
+    if (this.listenerCount('error') > 0) {
+      if (error instanceof Error) {
+        this.emit('error', error);
+      } else {
+        this.emit('error', new Error(String(error)));
+      }
+    }
   }
 }
