@@ -25,8 +25,8 @@ describe('GitServer', () => {
   });
 
   afterEach(async () => {
-    if (gitServer?.server) {
-      gitServer.server.close();
+    if (gitServer) {
+      gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
@@ -41,7 +41,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -74,7 +74,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -107,7 +107,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -179,7 +179,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -364,7 +364,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -413,7 +413,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -471,7 +471,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -530,7 +530,7 @@ describe('GitServer', () => {
     });
 
     gitServer.listen(0);
-    const address = gitServer.server.address();
+    const address = gitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }

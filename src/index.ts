@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
 import { createServer, IncomingMessage, ServerResponse, Server } from 'http';
+import { AddressInfo } from 'net';
 import { join, normalize } from 'path';
 import { PassThrough } from 'stream';
 import { parse } from 'url';
@@ -18,19 +19,10 @@ interface GitServerOptions {
   ) => Promise<void>;
 }
 
-/**
- * Sets cache control headers to prevent caching
- */
-function noCache(res: ServerResponse): void {
-  res.setHeader('Expires', 'Fri, 01 Jan 1980 00:00:00 GMT');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Cache-Control', 'no-cache, max-age=0, must-revalidate');
-}
-
 export class GitServer extends EventEmitter {
   private repositoryDirectory: string;
   private options: GitServerOptions;
-  public server!: Server;
+  private server!: Server;
 
   constructor(repositoryDirectory: string, options: GitServerOptions = {}) {
     super();
@@ -43,6 +35,16 @@ export class GitServer extends EventEmitter {
       autoCreate: options.autoCreate,
       hasAuthenticator: !!options.authenticate,
     });
+  }
+
+  public address(): string | AddressInfo | null {
+    return this.server.address();
+  }
+
+  public close(): void {
+    if (this.server) {
+      this.server.close();
+    }
   }
 
   public listen(port: number): void {
@@ -178,7 +180,7 @@ export class GitServer extends EventEmitter {
         'Content-Type',
         `application/x-git-${gitServiceName}-advertisement`,
       );
-      noCache(response);
+      this.setNoCacheHeaders(response);
 
       const packet = `# service=git-${gitServiceName}\n`;
       const length = (packet.length + 4).toString(16).padStart(4, '0');
@@ -234,28 +236,18 @@ export class GitServer extends EventEmitter {
       response.end(message);
     };
 
-    // Emit event and wait for response or timeout
     const info = {
       repo: repositoryName,
       accept: () => handleAccept(),
       reject: (message = 'rejected') => handleReject(message),
     };
 
-    console.log(`[GitServer] Emitting ${operationType} event`);
     this.emit(operationType, info);
 
-    // Wait for either accept, reject, or timeout
-    await new Promise<void>((resolve) => {
-      setTimeout(() => {
-        if (!accepted && !rejected) {
-          console.log(
-            `[GitServer] Auto-accepting ${operationType} info/refs after timeout`,
-          );
-          handleAccept();
-        }
-        resolve();
-      }, 1000);
-    });
+    // If no listeners, auto-accept immediately
+    if (this.listenerCount(operationType) === 0) {
+      handleAccept();
+    }
   }
 
   private async handleService(
@@ -316,7 +308,7 @@ export class GitServer extends EventEmitter {
         'Content-Type',
         `application/x-git-${gitServiceName}-result`,
       );
-      noCache(response);
+      this.setNoCacheHeaders(response);
 
       const args = [gitServiceName, '--stateless-rpc', repositoryPath];
       const gitProcess = spawn('git', args);
@@ -363,28 +355,39 @@ export class GitServer extends EventEmitter {
       response.end(message);
     };
 
-    // Emit event and wait for response or timeout
     const info = {
       repo: repositoryName,
       accept: () => handleAccept(),
       reject: (message = 'rejected') => handleReject(message),
     };
 
-    console.log(`[GitServer] Emitting ${operationType} event`);
     this.emit(operationType, info);
 
-    // Wait for either accept, reject, or timeout
-    await new Promise<void>((resolve) => {
-      setTimeout(() => {
-        if (!accepted && !rejected) {
-          console.log(
-            `[GitServer] Auto-accepting ${operationType} operation after timeout`,
-          );
-          handleAccept();
-        }
-        resolve();
-      }, 1000);
-    });
+    // If no listeners, auto-accept immediately
+    if (this.listenerCount(operationType) === 0) {
+      handleAccept();
+    }
+  }
+
+  private parseBasicAuth(request: IncomingMessage): {
+    username?: string;
+    password?: string;
+  } {
+    const authHeader = request.headers.authorization;
+    if (!authHeader) {
+      return {};
+    }
+
+    const [type, credentials] = authHeader.split(' ');
+    if (type !== 'Basic' || !credentials) {
+      return {};
+    }
+
+    const [username, password] = Buffer.from(credentials, 'base64')
+      .toString()
+      .split(':');
+
+    return { username, password };
   }
 
   private async authenticate(
@@ -394,32 +397,19 @@ export class GitServer extends EventEmitter {
     repositoryName: string,
   ): Promise<void> {
     if (!this.options.authenticate) {
-      console.log(
-        `[GitServer] No authentication configured, allowing ${operationType} operation`,
-      );
       return;
     }
 
-    const authHeader = request.headers.authorization;
-    const [username, password] = authHeader
-      ? Buffer.from(authHeader.split(' ')[1] || '', 'base64')
-          .toString()
-          .split(':')
-      : [];
+    const { username, password } = this.parseBasicAuth(request);
 
     try {
-      console.log(
-        `[GitServer] Validating credentials for ${operationType} operation on ${repositoryName}`,
-      );
       await this.options.authenticate(
         operationType,
         repositoryName,
         username,
         password,
       );
-      console.log(`[GitServer] Credentials validated successfully`);
     } catch (error) {
-      console.error(`[GitServer] Credential validation failed:`, error);
       response.setHeader('WWW-Authenticate', 'Basic realm="Git Server"');
       throw error;
     }
@@ -460,5 +450,10 @@ export class GitServer extends EventEmitter {
 
   private getOperationType(gitServiceName: string): 'push' | 'fetch' {
     return gitServiceName === 'receive-pack' ? 'push' : 'fetch';
+  }
+
+  private setNoCacheHeaders(res: ServerResponse): void {
+    res.setHeader('Cache-Control', 'no-cache, max-age=0, must-revalidate');
+    res.setHeader('Expires', 'Fri, 01 Jan 1980 00:00:00 GMT');
   }
 }
