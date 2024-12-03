@@ -44,7 +44,7 @@ interface GitServerEvents {
 export class GitServer extends EventEmitter {
   private repositoryDirectory: string;
   private options: GitServerOptions;
-  private server!: Server;
+  private server: Server = createServer(this.handleRequest.bind(this));
 
   public emit<K extends keyof GitServerEvents>(
     event: K,
@@ -84,17 +84,20 @@ export class GitServer extends EventEmitter {
     return this.server.address();
   }
 
-  public close(): void {
-    if (this.server) {
-      this.server.close();
-    } else {
-      this.emitError(new Error('Server is not running'));
-    }
+  public close(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.server.close((error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 
-  public listen(port: number): Promise<void> {
-    this.server = createServer(this.handleRequest.bind(this));
-    return new Promise<void>((resolve, reject) => {
+  public async listen(port: number): Promise<AddressInfo> {
+    await new Promise<void>((resolve, reject) => {
       this.server.once('listening', () => {
         resolve();
       });
@@ -103,6 +106,11 @@ export class GitServer extends EventEmitter {
       });
       this.server.listen(port);
     });
+    const address = this.server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    return address;
   }
 
   private async handleRequest(

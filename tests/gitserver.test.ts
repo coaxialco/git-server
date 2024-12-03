@@ -9,7 +9,6 @@ import { GitServer, GitInfo, TagInfo } from '../src/index.js';
 describe('GitServer', () => {
   let gitServer: GitServer;
   let repoDir: string;
-  let serverPort: number;
   let cloneDir: string;
 
   beforeEach(async () => {
@@ -19,7 +18,7 @@ describe('GitServer', () => {
 
   afterEach(async () => {
     if (gitServer) {
-      gitServer.close();
+      await gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
@@ -33,12 +32,7 @@ describe('GitServer', () => {
       },
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const cloneUrl = `http://invalid:creds@localhost:${serverPort}/testrepo`;
 
@@ -56,12 +50,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const cloneUrl = `http://user:pass@localhost:${serverPort}/nonexistent`;
 
@@ -79,12 +68,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     gitServer.on('push', (info: GitInfo) => {
       info.accept();
@@ -116,12 +100,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     let pushReceived = false;
     gitServer.on('push', (info: GitInfo) => {
@@ -198,12 +177,7 @@ describe('GitServer', () => {
       },
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const cloneUrl = `http://invalid:creds@localhost:${serverPort}/testrepo`;
 
@@ -225,12 +199,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -257,12 +226,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -291,12 +255,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -343,12 +302,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     // Setup head handler
     let headReceived = false;
@@ -400,12 +354,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     // Setup info handler
     let infoReceived = false;
@@ -462,12 +411,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     let tagReceived = false;
     let receivedTagInfo: TagInfo | undefined;
@@ -527,12 +471,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -588,12 +527,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -622,12 +556,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     // Set up rejection handler
     gitServer.on('info', (info: GitInfo) => {
@@ -654,12 +583,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     // Initialize bare repository
     await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
@@ -690,12 +614,7 @@ describe('GitServer', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -744,7 +663,6 @@ describe('GitServer', () => {
 describe('Branch Operations', () => {
   let gitServer: GitServer;
   let repoDir: string;
-  let serverPort: number;
   let cloneDir: string;
 
   beforeEach(async () => {
@@ -754,7 +672,7 @@ describe('Branch Operations', () => {
 
   afterEach(async () => {
     if (gitServer) {
-      gitServer.close();
+      await gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
@@ -766,12 +684,7 @@ describe('Branch Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -840,12 +753,7 @@ describe('Branch Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -904,7 +812,6 @@ describe('Branch Operations', () => {
 describe('Concurrent Operations', () => {
   let gitServer: GitServer;
   let repoDir: string;
-  let serverPort: number;
   let cloneDir: string;
 
   beforeEach(async () => {
@@ -914,7 +821,7 @@ describe('Concurrent Operations', () => {
 
   afterEach(async () => {
     if (gitServer) {
-      gitServer.close();
+      await gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
@@ -926,12 +833,7 @@ describe('Concurrent Operations', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -1006,7 +908,6 @@ describe('Concurrent Operations', () => {
 describe('Repository Configuration', () => {
   let gitServer: GitServer;
   let repoDir: string;
-  let serverPort: number;
   let cloneDir: string;
 
   beforeEach(async () => {
@@ -1016,7 +917,7 @@ describe('Repository Configuration', () => {
 
   afterEach(async () => {
     if (gitServer) {
-      gitServer.close();
+      await gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
@@ -1028,12 +929,7 @@ describe('Repository Configuration', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     const username = encodeURIComponent('testuser');
     const password = encodeURIComponent('testpass');
@@ -1106,23 +1002,23 @@ describe('Error Handling', () => {
 
   afterEach(async () => {
     if (gitServer) {
-      gitServer.close();
+      await gitServer.close();
     }
     await fs.rm(repoDir, { recursive: true, force: true });
     await fs.rm(cloneDir, { recursive: true, force: true });
   });
 
   test('should handle network interruption simulation', async () => {
-    gitServer = new GitServer(repoDir, {
+    const newGitServer = new GitServer(repoDir, {
       autoCreate: true,
       authenticate: () => Promise.resolve(),
     });
 
     let requestCount = 0;
-    const originalListen = gitServer.listen.bind(gitServer);
+    const originalListen = newGitServer.listen.bind(newGitServer);
 
     // Create a proxy to intercept server creation
-    gitServer.listen = function (this: GitServer, port: number): Promise<void> {
+    newGitServer.listen = function (this: GitServer, port: number) {
       const listenPromise = originalListen.call(this, port);
       // The server is created in the GitServer class
       const httpServer = (this as unknown as { server: Server }).server;
@@ -1140,8 +1036,8 @@ describe('Error Handling', () => {
       return listenPromise;
     };
 
-    void gitServer.listen(0);
-    const address = gitServer.address();
+    void newGitServer.listen(0);
+    const address = newGitServer.address();
     if (!address || typeof address === 'string') {
       throw new Error('Failed to get server port');
     }
@@ -1168,12 +1064,7 @@ describe('Error Handling', () => {
       authenticate: () => Promise.resolve(),
     });
 
-    await gitServer.listen(0);
-    const address = gitServer.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Failed to get server port');
-    }
-    serverPort = address.port;
+    const { port: serverPort } = await gitServer.listen(0);
 
     // Create an invalid repository (missing required files)
     await fs.mkdir(join(repoDir, 'invalid-repo'), { recursive: true });
