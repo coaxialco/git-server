@@ -250,10 +250,17 @@ export class GitServer extends EventEmitter {
       reject: (message = 'rejected') => handleReject(message),
     };
 
+    // Emit info event first
+    this.emit('info', info);
+
+    // Then emit the specific operation type event
     this.emit(operationType, info);
 
-    // If no listeners, auto-accept immediately
-    if (this.listenerCount(operationType) === 0) {
+    // If no listeners for either event, auto-accept
+    if (
+      this.listenerCount('info') === 0 &&
+      this.listenerCount(operationType) === 0
+    ) {
       handleAccept();
     }
   }

@@ -658,4 +658,76 @@ describe('GitServer', () => {
     // Verify head event was received
     expect(headReceived).toBe(true);
   });
+
+  test('should emit info event for repository operations', async () => {
+    gitServer = new GitServer(repoDir, {
+      autoCreate: true,
+      authenticate: () => Promise.resolve(),
+    });
+
+    gitServer.listen(0);
+    const address = gitServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to get server port');
+    }
+    serverPort = address.port;
+
+    // Setup info handler
+    let infoReceived = false;
+    let receivedRepo: string | undefined;
+    gitServer.on('info', (info: GitInfo) => {
+      infoReceived = true;
+      receivedRepo = info.repo;
+      info.accept();
+    });
+
+    // Initialize bare repository
+    await new Promise<void>((resolve, reject) => {
+      const gitInit = spawn('git', [
+        'init',
+        '--bare',
+        join(repoDir, 'testrepo'),
+      ]);
+      gitInit.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`git init failed with code ${code}`));
+      });
+    });
+
+    // Make an info/refs request
+    await new Promise<void>((resolve, reject) => {
+      const options = {
+        hostname: 'localhost',
+        port: serverPort,
+        path: '/testrepo/info/refs?service=git-upload-pack',
+        method: 'GET',
+      };
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve();
+          } else {
+            reject(
+              new Error(
+                `info/refs request failed with status ${res.statusCode}`,
+              ),
+            );
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.end();
+    });
+
+    // Verify info event was received with correct repository
+    expect(infoReceived).toBe(true);
+    expect(receivedRepo).toBe('testrepo');
+  });
 });
