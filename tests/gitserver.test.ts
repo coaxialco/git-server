@@ -6,7 +6,8 @@ import { mkdtemp } from 'fs/promises';
 import http from 'http';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { GitServer, GitInfo, TagInfo } from '../src';
+import { execa } from 'execa';
+import { GitServer, GitInfo, TagInfo } from '../src/index.js';
 
 describe('GitServer', () => {
   let gitServer: GitServer;
@@ -45,19 +46,9 @@ describe('GitServer', () => {
     const cloneUrl = `http://invalid:creds@localhost:${serverPort}/testrepo`;
 
     await expect(
-      new Promise((resolve, reject) => {
-        const gitClone = spawn('git', ['clone', cloneUrl], {
-          cwd: cloneDir,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        });
-
-        gitClone.on('exit', (code) => {
-          if (code === 0) {
-            resolve(code);
-          } else {
-            reject(new Error(`git clone failed with code ${code}`));
-          }
-        });
+      execa('git', ['clone', cloneUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       }),
     ).rejects.toThrow();
   });
@@ -78,19 +69,9 @@ describe('GitServer', () => {
     const cloneUrl = `http://user:pass@localhost:${serverPort}/nonexistent`;
 
     await expect(
-      new Promise((resolve, reject) => {
-        const gitClone = spawn('git', ['clone', cloneUrl], {
-          cwd: cloneDir,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        });
-
-        gitClone.on('exit', (code) => {
-          if (code === 0) {
-            resolve(code);
-          } else {
-            reject(new Error(`git clone failed with code ${code}`));
-          }
-        });
+      execa('git', ['clone', cloneUrl], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       }),
     ).rejects.toThrow();
   });
@@ -117,45 +98,11 @@ describe('GitServer', () => {
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
     // Initialize the test repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git init exited with code ${code}`));
-        }
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
-    await new Promise<void>((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
-        cwd: cloneDir,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0', // Disable git credential prompt
-        },
-      });
-
-      gitClone.stderr.on('data', (data) => {
-        console.error(`git clone stderr: ${data}`);
-      });
-
-      gitClone.stdout.on('data', (data) => {
-        console.log(`git clone stdout: ${data}`);
-      });
-
-      gitClone.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git clone exited with code ${code}`));
-        }
-      });
+    await execa('git', ['clone', cloneUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
     const exists = await fs
@@ -167,7 +114,6 @@ describe('GitServer', () => {
   });
 
   test('should handle git push', async () => {
-    // Setup git server
     gitServer = new GitServer(repoDir, {
       autoCreate: true,
       authenticate: () => Promise.resolve(),
@@ -180,7 +126,6 @@ describe('GitServer', () => {
     }
     serverPort = address.port;
 
-    // Setup push handler
     let pushReceived = false;
     gitServer.on('push', (info: GitInfo) => {
       pushReceived = true;
@@ -192,83 +137,26 @@ describe('GitServer', () => {
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git init failed with code ${code}`));
-        }
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     // Clone repository
-    await new Promise<void>((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
-        cwd: cloneDir,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      });
-      gitClone.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git clone failed with code ${code}`));
-        }
-      });
+    await execa('git', ['clone', cloneUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
-    // Create and commit a test file
     const testRepoPath = join(cloneDir, 'testrepo');
     await fs.writeFile(join(testRepoPath, 'test.txt'), 'test content');
 
-    // Configure git user
-    await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn(
-        'git',
-        ['config', 'user.email', 'test@example.com'],
-        {
-          cwd: testRepoPath,
-        },
-      );
-      gitConfig.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git config email failed with code ${code}`));
-        }
-      });
+    // Configure git
+    await execa('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: testRepoPath,
     });
-
-    await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn('git', ['config', 'user.name', 'Test User'], {
-        cwd: testRepoPath,
-      });
-      gitConfig.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git config name failed with code ${code}`));
-        }
-      });
+    await execa('git', ['config', 'user.name', 'Test User'], {
+      cwd: testRepoPath,
     });
-
-    // Configure git credentials
-    await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn('git', ['config', 'credential.helper', 'store'], {
-        cwd: testRepoPath,
-      });
-      gitConfig.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git config failed with code ${code}`));
-        }
-      });
+    await execa('git', ['config', 'credential.helper', 'store'], {
+      cwd: testRepoPath,
     });
 
     // Store credentials
@@ -279,68 +167,23 @@ describe('GitServer', () => {
     );
 
     // Add and commit changes
-    await new Promise<void>((resolve, reject) => {
-      const gitAdd = spawn('git', ['add', '.'], { cwd: testRepoPath });
-      gitAdd.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git add failed with code ${code}`));
-        }
-      });
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      const gitCommit = spawn('git', ['commit', '-m', 'test commit'], {
-        cwd: testRepoPath,
-      });
-      gitCommit.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git commit failed with code ${code}`));
-        }
-      });
-    });
+    await execa('git', ['add', '.'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'test commit'], { cwd: testRepoPath });
 
     // Push changes
-    await new Promise<void>((resolve, reject) => {
-      const gitPush = spawn('git', ['push', '-u', 'origin', 'HEAD:main'], {
-        cwd: testRepoPath,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0',
-          GIT_ASKPASS: 'echo',
-          GIT_USERNAME: username,
-          GIT_PASSWORD: password,
-        },
-      });
-
-      gitPush.stderr.on('data', (data) => {
-        console.error(`git push stderr: ${data}`);
-      });
-
-      gitPush.stdout.on('data', (data) => {
-        console.log(`git push stdout: ${data}`);
-      });
-
-      gitPush.on('error', (error) => {
-        console.error('git push error:', error);
-        reject(error);
-      });
-
-      gitPush.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git push failed with code ${code}`));
-        }
-      });
+    await execa('git', ['push', '-u', 'origin', 'HEAD:main'], {
+      cwd: testRepoPath,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_ASKPASS: 'echo',
+        GIT_USERNAME: username,
+        GIT_PASSWORD: password,
+      },
     });
 
     expect(pushReceived).toBe(true);
 
-    // Verify the pushed file exists in the bare repository
     const bareRepoFile = join(repoDir, 'testrepo', 'objects');
     const bareRepoExists = await fs
       .access(bareRepoFile)
@@ -368,35 +211,13 @@ describe('GitServer', () => {
     const cloneUrl = `http://invalid:creds@localhost:${serverPort}/testrepo`;
 
     // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git init failed with code ${code}`));
-        }
-      });
-    });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
     // Attempt to push (should fail)
     await expect(
-      new Promise((resolve, reject) => {
-        const gitPush = spawn('git', ['push', cloneUrl, 'main'], {
-          cwd: cloneDir,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        });
-        gitPush.on('exit', (code) => {
-          if (code === 0) {
-            resolve(code);
-          } else {
-            reject(new Error(`git push failed with code ${code}`));
-          }
-        });
+      execa('git', ['push', cloneUrl, 'main'], {
+        cwd: cloneDir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       }),
     ).rejects.toThrow();
   });
@@ -418,44 +239,18 @@ describe('GitServer', () => {
     const password = encodeURIComponent('testpass');
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
-    // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
-
-    // Add event listener without accept/reject to trigger auto-accept
     let eventReceived = false;
     gitServer.once('fetch', () => {
       eventReceived = true;
-      // Deliberately not calling accept() to test auto-accept
     });
 
-    // Start git clone operation
-    const clonePromise = new Promise<void>((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
-        cwd: cloneDir,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      });
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
 
-      gitClone.stderr.on('data', (data) => {
-        console.error(`git clone stderr: ${data}`);
-      });
-
-      gitClone.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git clone failed with code ${code}`));
-      });
+    await execa('git', ['clone', cloneUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
-    await clonePromise;
     expect(eventReceived).toBe(true);
   });
 
@@ -744,7 +539,6 @@ describe('GitServer', () => {
     }
     serverPort = address.port;
 
-    // Setup tag handler
     let tagReceived = false;
     let receivedTagInfo: TagInfo | undefined;
     gitServer.on('tag', (info: TagInfo) => {
@@ -757,125 +551,42 @@ describe('GitServer', () => {
     const password = encodeURIComponent('testpass');
     const cloneUrl = `http://${username}:${password}@localhost:${serverPort}/testrepo`;
 
-    // Initialize bare repository
-    await new Promise<void>((resolve, reject) => {
-      const gitInit = spawn('git', [
-        'init',
-        '--bare',
-        join(repoDir, 'testrepo'),
-      ]);
-      gitInit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git init failed with code ${code}`));
-      });
-    });
-
-    // Clone repository
-    await new Promise<void>((resolve, reject) => {
-      const gitClone = spawn('git', ['clone', cloneUrl], {
-        cwd: cloneDir,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      });
-      gitClone.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git clone failed with code ${code}`));
-      });
+    // Initialize and setup repository
+    await execa('git', ['init', '--bare', join(repoDir, 'testrepo')]);
+    await execa('git', ['clone', cloneUrl], {
+      cwd: cloneDir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
     const testRepoPath = join(cloneDir, 'testrepo');
 
-    // Configure git user
-    await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn(
-        'git',
-        ['config', 'user.email', 'test@example.com'],
-        {
-          cwd: testRepoPath,
-        },
-      );
-      gitConfig.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git config email failed with code ${code}`));
-      });
+    // Configure git
+    await execa('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: testRepoPath,
+    });
+    await execa('git', ['config', 'user.name', 'Test User'], {
+      cwd: testRepoPath,
     });
 
-    await new Promise<void>((resolve, reject) => {
-      const gitConfig = spawn('git', ['config', 'user.name', 'Test User'], {
-        cwd: testRepoPath,
-      });
-      gitConfig.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git config name failed with code ${code}`));
-      });
-    });
-
-    // Create and commit a test file
+    // Create and commit test file
     await fs.writeFile(join(testRepoPath, 'test.txt'), 'test content');
+    await execa('git', ['add', '.'], { cwd: testRepoPath });
+    await execa('git', ['commit', '-m', 'test commit'], { cwd: testRepoPath });
 
-    // Add and commit changes
-    await new Promise<void>((resolve, reject) => {
-      const gitAdd = spawn('git', ['add', '.'], { cwd: testRepoPath });
-      gitAdd.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git add failed with code ${code}`));
-      });
+    // Create and push tag
+    await execa('git', ['tag', '-a', 'v1.0.0', '-m', 'First release'], {
+      cwd: testRepoPath,
     });
 
-    await new Promise<void>((resolve, reject) => {
-      const gitCommit = spawn('git', ['commit', '-m', 'test commit'], {
-        cwd: testRepoPath,
-      });
-      gitCommit.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git commit failed with code ${code}`));
-      });
+    await execa('git', ['push', 'origin', 'v1.0.0'], {
+      cwd: testRepoPath,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
-    // Create and push a tag
-    await new Promise<void>((resolve, reject) => {
-      const gitTag = spawn(
-        'git',
-        ['tag', '-a', 'v1.0.0', '-m', 'First release'],
-        {
-          cwd: testRepoPath,
-        },
-      );
-      gitTag.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git tag failed with code ${code}`));
-      });
-    });
-
-    // Push the tag
-    await new Promise<void>((resolve, reject) => {
-      const gitPush = spawn('git', ['push', 'origin', 'v1.0.0'], {
-        cwd: testRepoPath,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0',
-        },
-      });
-
-      gitPush.stderr.on('data', (data) => {
-        console.error(`git push stderr: ${data}`);
-      });
-
-      gitPush.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`git push tag failed with code ${code}`));
-      });
-    });
-
-    // Verify tag event was received with correct information
     expect(tagReceived).toBe(true);
     expect(receivedTagInfo).toBeDefined();
     if (receivedTagInfo) {
       expect(receivedTagInfo.repo).toBe('testrepo');
-      console.log(
-        'Received tag version:',
-        JSON.stringify(receivedTagInfo.version),
-      );
-      console.log('Expected tag version:', JSON.stringify('v1.0.0'));
       expect(receivedTagInfo.version).toEqual('v1.0.0');
     }
   }, 10000);

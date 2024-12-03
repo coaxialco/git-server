@@ -4,6 +4,7 @@
   "description": "🎡 A configurable git server written in Node.js",
   "author": "John Wehr <johnwehr@gmail.com>",
   "license": "MIT",
+  "type": "module",
   "main": "dist/index.js",
   "engine": {
     "node": ">= 16"
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.701.0",
+    "execa": "^9.5.1",
     "through": "^2.3.8"
   },
   "devDependencies": {
