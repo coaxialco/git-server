@@ -28,15 +28,15 @@ function noCache(res: ServerResponse): void {
 }
 
 export class GitServer extends EventEmitter {
-  private repoDir: string;
+  private repositoryDirectory: string;
   private options: GitServerOptions;
   public server!: Server;
 
-  constructor(repoDir: string, options: GitServerOptions = {}) {
+  constructor(repositoryDirectory: string, options: GitServerOptions = {}) {
     super();
-    this.repoDir = repoDir;
+    this.repositoryDirectory = repositoryDirectory;
     this.options = options;
-    console.log(`[GitServer] Initialized with repo directory: ${repoDir}`);
+    console.log(`[GitServer] Initialized with repo directory: ${repositoryDirectory}`);
     console.log(`[GitServer] Options:`, {
       autoCreate: options.autoCreate,
       hasAuthenticator: !!options.authenticate,
@@ -49,85 +49,85 @@ export class GitServer extends EventEmitter {
     this.server.listen(port);
   }
 
-  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    console.log(`[GitServer] Received ${req.method} request: ${req.url}`);
-    console.log(`[GitServer] Request headers:`, req.headers);
+  private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    console.log(`[GitServer] Received ${request.method} request: ${request.url}`);
+    console.log(`[GitServer] Request headers:`, request.headers);
 
-    const path = parse(req.url || '').pathname || '';
-    const [, repoName, action] = path.match(/^\/(.+?)\/(info\/refs|git-(?:upload|receive)-pack)$/) || [];
+    const requestPath = parse(request.url || '').pathname || '';
+    const [, repositoryName, action] = requestPath.match(/^\/(.+?)\/(info\/refs|git-(?:upload|receive)-pack)$/) || [];
     
-    if (!repoName || !action) {
-      console.log(`[GitServer] Invalid request path: ${path}`);
-      res.statusCode = 404;
-      res.end('Not Found');
+    if (!repositoryName || !action) {
+      console.log(`[GitServer] Invalid request path: ${requestPath}`);
+      response.statusCode = 404;
+      response.end('Not Found');
       return;
     }
 
-    const repoPath = normalize(join(this.repoDir, repoName));
-    console.log(`[GitServer] Processing request for repo: ${repoName}, action: ${action}`);
-    console.log(`[GitServer] Normalized repo path: ${repoPath}`);
+    const repositoryPath = normalize(join(this.repositoryDirectory, repositoryName));
+    console.log(`[GitServer] Processing request for repo: ${repositoryName}, action: ${action}`);
+    console.log(`[GitServer] Normalized repo path: ${repositoryPath}`);
 
     action === 'info/refs' 
-      ? await this.handleInfoRefs(req, res, repoName, repoPath)
-      : await this.handleService(req, res, repoName, repoPath, action);
+      ? await this.handleInfoRefs(request, response, repositoryName, repositoryPath)
+      : await this.handleService(request, response, repositoryName, repositoryPath, action);
   }
 
   private async handleInfoRefs(
-    req: IncomingMessage,
-    res: ServerResponse,
-    repoName: string,
-    repoPath: string,
+    request: IncomingMessage,
+    response: ServerResponse,
+    repositoryName: string,
+    repositoryPath: string,
   ): Promise<void> {
-    console.log(`[GitServer] Handling info/refs for repo: ${repoName}`);
+    console.log(`[GitServer] Handling info/refs for repo: ${repositoryName}`);
 
-    const service = parse(req.url || '', true).query['service']?.toString();
+    const service = parse(request.url || '', true).query['service']?.toString();
     if (!service) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('service parameter required');
+      response.statusCode = 400;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('service parameter required');
       return;
     }
 
-    const serviceName = service.replace(/^git-/, '');
+    const gitServiceName = service.replace(/^git-/, '');
     const validServices = ['upload-pack', 'receive-pack'];
-    if (!validServices.includes(serviceName)) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Invalid service');
+    if (!validServices.includes(gitServiceName)) {
+      response.statusCode = 400;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('Invalid service');
       return;
     }
 
-    const type = this.getOperationType(serviceName);
+    const operationType = this.getOperationType(gitServiceName);
 
     try {
-      console.log(`[GitServer] Attempting authentication for ${type} operation`);
-      await this.authenticate(req, res, type, repoName);
+      console.log(`[GitServer] Attempting authentication for ${operationType} operation`);
+      await this.authenticate(request, response, operationType, repositoryName);
       console.log(`[GitServer] Authentication successful`);
     } catch (error) {
       console.error(`[GitServer] Authentication failed:`, error);
-      res.statusCode = 401;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Authentication failed');
+      response.statusCode = 401;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('Authentication failed');
       return;
     }
 
     try {
-      console.log(`[GitServer] Checking repository existence: ${repoPath}`);
-      await fs.access(repoPath);
+      console.log(`[GitServer] Checking repository existence: ${repositoryPath}`);
+      await fs.access(repositoryPath);
       console.log(`[GitServer] Repository exists`);
     } catch (error) {
       if (this.options.autoCreate) {
         console.log(
-          `[GitServer] Repository does not exist, auto-creating: ${repoPath}`,
+          `[GitServer] Repository does not exist, auto-creating: ${repositoryPath}`,
         );
-        await this.createRepo(repoPath);
+        await this.createRepo(repositoryPath);
       } else {
         console.error(
           `[GitServer] Repository not found and auto-create disabled:`,
           error,
         );
-        res.statusCode = 404;
-        res.end('Repository not found');
+        response.statusCode = 404;
+        response.end('Repository not found');
         return;
       }
     }
@@ -139,28 +139,28 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       accepted = true;
 
-      console.log(`[GitServer] ${type} info/refs accepted, sending advertisement`);
-      res.statusCode = 200;
-      res.setHeader(
+      console.log(`[GitServer] ${operationType} info/refs accepted, sending advertisement`);
+      response.statusCode = 200;
+      response.setHeader(
         'Content-Type',
-        `application/x-git-${serviceName}-advertisement`,
+        `application/x-git-${gitServiceName}-advertisement`,
       );
-      noCache(res);
+      noCache(response);
 
-      const packet = `# service=git-${serviceName}\n`;
+      const packet = `# service=git-${gitServiceName}\n`;
       const length = (packet.length + 4).toString(16).padStart(4, '0');
-      res.write(length + packet + '0000');
+      response.write(length + packet + '0000');
 
       const gitProcess = spawn('git', [
-        serviceName,
+        gitServiceName,
         '--stateless-rpc',
         '--advertise-refs',
-        repoPath,
+        repositoryPath,
       ]);
 
       console.log(`[GitServer] Spawned git process for refs advertisement`);
 
-      gitProcess.stdout.pipe(res);
+      gitProcess.stdout.pipe(response);
 
       gitProcess.stderr.on('data', (data) => {
         console.error(`[GitServer] Git refs process stderr: ${data}`);
@@ -168,20 +168,20 @@ export class GitServer extends EventEmitter {
 
       gitProcess.on('error', (error) => {
         console.error(`[GitServer] Git refs process error:`, error);
-        if (!res.headersSent) {
-          res.statusCode = 500;
-          res.end(`Git process error: ${error.message}`);
+        if (!response.headersSent) {
+          response.statusCode = 500;
+          response.end(`Git process error: ${error.message}`);
         }
       });
 
       gitProcess.on('close', (code) => {
         console.log(`[GitServer] Git refs process completed with code: ${code}`);
-        if (!res.headersSent) {
+        if (!response.headersSent) {
           if (code === 0) {
-            res.end();
+            response.end();
           } else {
-            res.statusCode = 500;
-            res.end(`Git process exited with code ${code}`);
+            response.statusCode = 500;
+            response.end(`Git process exited with code ${code}`);
           }
         }
       });
@@ -191,27 +191,27 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       rejected = true;
 
-      console.log(`[GitServer] ${type} info/refs rejected: ${message}`);
-      res.statusCode = 403;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end(message);
+      console.log(`[GitServer] ${operationType} info/refs rejected: ${message}`);
+      response.statusCode = 403;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end(message);
     };
 
     // Emit event and wait for response or timeout
     const info = {
-      repo: repoName,
+      repo: repositoryName,
       accept: () => handleAccept(),
       reject: (message = 'rejected') => handleReject(message),
     };
 
-    console.log(`[GitServer] Emitting ${type} event`);
-    this.emit(type, info);
+    console.log(`[GitServer] Emitting ${operationType} event`);
+    this.emit(operationType, info);
 
     // Wait for either accept, reject, or timeout
     await new Promise<void>((resolve) => {
       setTimeout(() => {
         if (!accepted && !rejected) {
-          console.log(`[GitServer] Auto-accepting ${type} info/refs after timeout`);
+          console.log(`[GitServer] Auto-accepting ${operationType} info/refs after timeout`);
           handleAccept();
         }
         resolve();
@@ -220,43 +220,43 @@ export class GitServer extends EventEmitter {
   }
 
   private async handleService(
-    req: IncomingMessage,
-    res: ServerResponse,
-    repoName: string,
-    repoPath: string,
+    request: IncomingMessage,
+    response: ServerResponse,
+    repositoryName: string,
+    repositoryPath: string,
     action: string,
   ): Promise<void> {
-    console.log(`[GitServer] Handling service: ${action} for repo: ${repoName}`);
-    const serviceName = action.replace('git-', '');
-    const type = this.getOperationType(serviceName);
+    console.log(`[GitServer] Handling service: ${action} for repo: ${repositoryName}`);
+    const gitServiceName = action.replace('git-', '');
+    const operationType = this.getOperationType(gitServiceName);
 
     try {
-      console.log(`[GitServer] Authenticating ${type} operation`);
-      await this.authenticate(req, res, type, repoName);
+      console.log(`[GitServer] Authenticating ${operationType} operation`);
+      await this.authenticate(request, response, operationType, repositoryName);
       console.log(`[GitServer] Authentication successful`);
     } catch (error) {
       console.error(`[GitServer] Authentication failed:`, error);
-      res.statusCode = 401;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end('Authentication failed');
+      response.statusCode = 401;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('Authentication failed');
       return;
     }
 
     try {
-      console.log(`[GitServer] Checking repository existence: ${repoPath}`);
-      await fs.access(repoPath);
+      console.log(`[GitServer] Checking repository existence: ${repositoryPath}`);
+      await fs.access(repositoryPath);
       console.log(`[GitServer] Repository exists`);
     } catch (error) {
       console.error(`[GitServer] Repository access error:`, error);
-      res.statusCode = 404;
-      res.end('Repository not found');
+      response.statusCode = 404;
+      response.end('Repository not found');
       return;
     }
 
     // Create a paused buffer for request data
-    const buffered = new PassThrough();
-    req.pipe(buffered);
-    buffered.pause();
+    const bufferedStream = new PassThrough();
+    request.pipe(bufferedStream);
+    bufferedStream.pause();
 
     let accepted = false;
     let rejected = false;
@@ -265,12 +265,12 @@ export class GitServer extends EventEmitter {
       if (accepted || rejected) return;
       accepted = true;
       
-      console.log(`[GitServer] ${type} operation accepted, spawning git process`);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', `application/x-git-${serviceName}-result`);
-      noCache(res);
+      console.log(`[GitServer] ${operationType} operation accepted, spawning git process`);
+      response.statusCode = 200;
+      response.setHeader('Content-Type', `application/x-git-${gitServiceName}-result`);
+      noCache(response);
 
-      const args = [serviceName, '--stateless-rpc', repoPath];
+      const args = [gitServiceName, '--stateless-rpc', repositoryPath];
       const gitProcess = spawn('git', args);
 
       gitProcess.stderr.on('data', (data) => {
@@ -279,55 +279,55 @@ export class GitServer extends EventEmitter {
 
       gitProcess.on('error', (error) => {
         console.error(`[GitServer] Git process error:`, error);
-        if (!res.headersSent) {
-          res.statusCode = 500;
-          res.end(`Git process error: ${error.message}`);
+        if (!response.headersSent) {
+          response.statusCode = 500;
+          response.end(`Git process error: ${error.message}`);
         }
       });
 
       gitProcess.on('close', (code) => {
         console.log(`[GitServer] Git process closed with code ${code}`);
-        if (!res.headersSent) {
+        if (!response.headersSent) {
           if (code === 0) {
-            res.end();
+            response.end();
           } else {
-            res.statusCode = 500;
-            res.end(`Git process exited with code ${code}`);
+            response.statusCode = 500;
+            response.end(`Git process exited with code ${code}`);
           }
         }
       });
 
       // Setup the stream pipeline
-      gitProcess.stdout.pipe(res);
-      buffered.pipe(gitProcess.stdin);
-      buffered.resume();
+      gitProcess.stdout.pipe(response);
+      bufferedStream.pipe(gitProcess.stdin);
+      bufferedStream.resume();
     };
 
     const handleReject = (message: string) => {
       if (accepted || rejected) return;
       rejected = true;
       
-      console.log(`[GitServer] ${type} operation rejected: ${message}`);
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end(message);
+      console.log(`[GitServer] ${operationType} operation rejected: ${message}`);
+      response.statusCode = 500;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end(message);
     };
 
     // Emit event and wait for response or timeout
     const info = {
-      repo: repoName,
+      repo: repositoryName,
       accept: () => handleAccept(),
       reject: (message = 'rejected') => handleReject(message),
     };
 
-    console.log(`[GitServer] Emitting ${type} event`);
-    this.emit(type, info);
+    console.log(`[GitServer] Emitting ${operationType} event`);
+    this.emit(operationType, info);
 
     // Wait for either accept, reject, or timeout
     await new Promise<void>((resolve) => {
       setTimeout(() => {
         if (!accepted && !rejected) {
-          console.log(`[GitServer] Auto-accepting ${type} operation after timeout`);
+          console.log(`[GitServer] Auto-accepting ${operationType} operation after timeout`);
           handleAccept();
         }
         resolve();
@@ -336,41 +336,41 @@ export class GitServer extends EventEmitter {
   }
 
   private async authenticate(
-    req: IncomingMessage,
-    res: ServerResponse,
-    type: 'push' | 'fetch',
-    repoName: string,
+    request: IncomingMessage,
+    response: ServerResponse,
+    operationType: 'push' | 'fetch',
+    repositoryName: string,
   ): Promise<void> {
     if (!this.options.authenticate) {
-      console.log(`[GitServer] No authentication configured, allowing ${type} operation`);
+      console.log(`[GitServer] No authentication configured, allowing ${operationType} operation`);
       return;
     }
 
-    const auth = req.headers.authorization;
-    const [username, password] = auth
-      ? Buffer.from(auth.split(' ')[1] || '', 'base64')
+    const authHeader = request.headers.authorization;
+    const [username, password] = authHeader
+      ? Buffer.from(authHeader.split(' ')[1] || '', 'base64')
           .toString()
           .split(':')
       : [];
 
     try {
-      console.log(`[GitServer] Validating credentials for ${type} operation on ${repoName}`);
-      await this.options.authenticate(type, repoName, username, password);
+      console.log(`[GitServer] Validating credentials for ${operationType} operation on ${repositoryName}`);
+      await this.options.authenticate(operationType, repositoryName, username, password);
       console.log(`[GitServer] Credentials validated successfully`);
     } catch (error) {
       console.error(`[GitServer] Credential validation failed:`, error);
-      res.setHeader('WWW-Authenticate', 'Basic realm="Git Server"');
+      response.setHeader('WWW-Authenticate', 'Basic realm="Git Server"');
       throw error;
     }
   }
 
-  private async createRepo(repoPath: string): Promise<void> {
-    console.log(`[GitServer] Creating new bare repository at: ${repoPath}`);
-    await fs.mkdir(repoPath, { recursive: true });
+  private async createRepo(repositoryPath: string): Promise<void> {
+    console.log(`[GitServer] Creating new bare repository at: ${repositoryPath}`);
+    await fs.mkdir(repositoryPath, { recursive: true });
 
     await new Promise<void>((resolve, reject) => {
       console.log(`[GitServer] Initializing bare git repository`);
-      const gitProcess = spawn('git', ['init', '--bare', repoPath]);
+      const gitProcess = spawn('git', ['init', '--bare', repositoryPath]);
 
       gitProcess.stderr.on('data', (data) => {
         console.log(`[GitServer] Git init process stderr: ${data}`);
@@ -395,7 +395,7 @@ export class GitServer extends EventEmitter {
     });
   }
 
-  private getOperationType(serviceName: string): 'push' | 'fetch' {
-    return serviceName === 'receive-pack' ? 'push' : 'fetch';
+  private getOperationType(gitServiceName: string): 'push' | 'fetch' {
+    return gitServiceName === 'receive-pack' ? 'push' : 'fetch';
   }
 }
